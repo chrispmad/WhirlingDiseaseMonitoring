@@ -78,6 +78,7 @@ The EMS database has `r nrowc(ems_wt)` rows, where `r nrowc(ems_wt[ems_wt$PARAME
 
 Number of rows of EMS temperature data by parameter and year:
 ```{r ems_table}
+### May need to filter by the source
 ems_wt |> 
   sf::st_drop_geometry() |> 
   dplyr::count(PARAMETER,the_year) |> 
