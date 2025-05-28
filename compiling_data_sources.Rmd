@@ -19,7 +19,7 @@ library(bcdata)
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
-lan_root = "//SFP.IDIR.BCGOV/S140/S40203/RSD_ FISH & AQUATIC HABITAT BRANCH/General/"
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
 requery_occs = F
 
@@ -57,7 +57,9 @@ Layers currently available based on Hydroclim data: `r hydroclim_layer_names`.
 ```{r}
 
 # The following path will work on Chris' computer. Not on Johns, though.
-path_to_EMS = paste0(base_dir,"/Downloads/LocalR/long_term_projects/EMS/output/EMS.sqlite")
+#path_to_EMS = paste0(base_dir,"/Downloads/LocalR/long_term_projects/EMS/output/EMS.sqlite")
+path_to_EMS <- file.path(dirname(onedrive_wd), "R_projects", "EMS", "output", "EMS.sqlite")
+
 
 if(file.exists(path_to_EMS)){
   ems_db = DBI::dbConnect(RSQLite::SQLite(), path_to_EMS)
@@ -72,9 +74,15 @@ ems_wt = DBI::dbGetQuery(ems_db, "select * from results where PARAMETER like 'Te
 ems_wt = ems_wt |> 
   dplyr::mutate(the_date = lubridate::ymd_hms(COLLECTION_START)) |> 
   dplyr::mutate(the_year = lubridate::year(the_date))
+
+ems_wt<-ems_wt |> 
+    dplyr::filter(!is.na(RESULT)) %>% 
+    dplyr::filter(LOCATION_TYPE == "RIVER,STREAM OR CREEK" |
+                    LOCATION_TYPE == "MONITORING WELL" |
+                    LOCATION_TYPE == "LAKE OR POND")
 ```
 
-The EMS database has `r nrowc(ems_wt)` rows, where `r nrowc(ems_wt[ems_wt$PARAMETER == 'Temperature',])` rows are of parameter type 'Temperature' and `r nrowc(ems_wt[ems_wt$PARAMETER == 'Temperature-Field',])` rows are of parameter type 'Temperature-Field.'
+The EMS database, was filtered for locations that were tagged as "River, Stream, Or Creek", "Monitoring Well", or " Lake or Pond". The data has `r nrowc(ems_wt)` rows, where `r nrowc(ems_wt[ems_wt$PARAMETER == 'Temperature',])` rows are of parameter type 'Temperature' and `r nrowc(ems_wt[ems_wt$PARAMETER == 'Temperature-Field',])` rows are of parameter type 'Temperature-Field.'
 
 Number of rows of EMS temperature data by parameter and year:
 ```{r ems_table}
@@ -84,6 +92,40 @@ ems_wt |>
   dplyr::count(PARAMETER,the_year) |> 
   tidyr::pivot_wider(names_from = PARAMETER, values_from = n, values_fill = 0) |> 
   DT::datatable()
+
+
+
+### Temperatures where there are a lot of readings look good - no big values outside what could be considered a normal range
+# ems_wt |> 
+#   sf::st_drop_geometry() |> 
+#   dplyr::count(PARAMETER, MONITORING_LOCATION) |> 
+#   tidyr::pivot_wider(names_from = PARAMETER, values_from = n, values_fill = 0) |> 
+#   DT::datatable()
+# 
+# 
+# top_locations <- ems_wt |>
+#   sf::st_drop_geometry() |> 
+#   count(MONITORING_LOCATION, sort = TRUE) |> 
+#   slice_head(n = 10) |> 
+#   pull(MONITORING_LOCATION)
+#   
+# ems_wt_top10 <- ems_wt |> 
+#   filter(MONITORING_LOCATION %in% top_locations)
+# 
+# ggplot(ems_wt_top10, aes(x = COLLECTION_DATE, y = RESULT, color = PARAMETER)) +
+#   geom_line() +
+#   geom_point(alpha = 0.5) +
+#   facet_wrap(~ MONITORING_LOCATION, scales = "free_y") +
+#   labs(
+#     title = "Temperature Readings Over Time at Top 10 Monitoring Locations",
+#     x = "Date",
+#     y = "Temperature (units)",  # Replace with actual units if available
+#     color = "Parameter"
+#   ) +
+#   theme_minimal()
+
+
+
 ```
 
 Plots of number of EMS data points by grid cell:
@@ -121,14 +163,14 @@ ggplot() +
 ```{r}
 # Fish occurrence records queried from typical data sources.
 all_occs = sf::read_sf(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/5_Incidental Observations/AIS_occurrences_all_sources.gpkg"))
-
+source("grab_occs_updated_path.R")
 # rel_occs = all_occs |> 
 #   dplyr::filter(Species %in% c("Bull trout","Sockeye salmon"))
 
 # Add queries for Bull Trout and Sockeye Salmon
 if(requery_occs){
-  bt_occs = suppressMessages(suppressWarnings(grab_aq_occ_data('Bull Trout', quiet = T)))
-  ss_occs = suppressMessages(suppressWarnings(grab_aq_occ_data('Sockeye Salmon')))
+  bt_occs = suppressMessages(suppressWarnings(grab_aq_occ_data_path_update('Bull Trout', quiet = T)))
+  ss_occs = suppressMessages(suppressWarnings(grab_aq_occ_data_path_update('Sockeye Salmon')))
   
   sf::write_sf(bt_occs, "data/bull_trout_occurrences.gpkg")
   sf::write_sf(ss_occs, "data/sockeye_salmon_occurrences.gpkg")
@@ -144,6 +186,41 @@ ggplot() +
   geom_sf(data = fish_occs) +
   facet_wrap( ~ Species)
 ```
+
+##### Angler Use
+
+This is the DFO data layer of angler use, with the scale being the number of days fished.
+```{r plot_angler_use}
+
+anglerUse<-terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
+#plot(anglerUse, main = "Angler Use (Days Fished)")
+
+ggplot()+
+  geom_sf(data = bc) + 
+  geom_raster(data = as.data.frame(anglerUse, xy = TRUE), aes(x = x, y = y, fill = days_fished)) +
+  scale_fill_viridis_c() +
+  labs(title = "Angler Use (Days Fished)", fill = "Days Fished") +
+  theme_minimal()
+
+```
+
+#### Watercraft Inspections
+
+```{r}
+
+watercraftInspections<-sf::read_sf("W:/CMadsen/shared_data_sets/Waterbodies_with_Inspection_Data_Summaries.gpkg")
+
+ggplot()+
+  geom_sf(data = bc) + 
+  geom_sf(data = watercraftInspections, aes(color = TotalInspections)) +
+  scale_color_viridis_c() +
+  labs(title = "Watercraft Inspections", color = "Inspection Count") +
+  theme_minimal()
+
+```
+
+
+
 
 #### Fish Periodicity
 
