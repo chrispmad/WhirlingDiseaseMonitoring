@@ -1,0 +1,246 @@
+---
+title: "fish_temp_overlap"
+author: "John Phelan"
+date: "2025-05-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+
+library(terra)
+library(dbplyr)
+library(DBI)
+library(tidyverse)
+library(bcinvadeR)
+library(bcdata)
+library(RColorBrewer)
+library(leaflet)
+library(leafpop)
+
+base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
+
+requery_occs = F
+
+# Custom function to show number of rows with commas.
+nrowc = function(dat){
+  scales::comma(nrow(dat))
+}
+```
+
+
+#### Hydroclim
+```{r get_hydroclim}
+hydroclim_layers_in_onedrive = list.files(
+  path = paste0(onedrive_wd,"raster/hydroclim_goldMussel_rast/"),
+  pattern = "^bc_.*\\.tif$",
+  full.names = T
+)
+
+hydroclim_layer_names = paste0(str_remove(str_replace_all(str_extract(hydroclim_layers_in_onedrive,"bc_.*\\.tif$"),"(_|\\.)"," "),"( rast)? tif"), collapse = ', ')
+
+hydroclim = terra::rast(hydroclim_layers_in_onedrive[1])
+
+
+```
+
+#### Occurrences
+
+The species that are susseptible to whirling disease are: 
+- Oncorhynchus clarkii (cutthroat trout)
+- Oncorhynchus kisutch (coho salmon)
+- Oncorhynchus mykiss (rainbow trout)
+- Oncorhynchus nerka (sockeye salmon)
+- Oncorhynchus tshawytscha (chinook salmon)
+- Prosopium williamsoni (mountain whitefish)
+- Salmo salar (Atlantic salmon)
+- Salmo trutta (brown trout)
+- Salvelinus confluentus (bull trout)
+- Salvelinus fontinalis (brook trout)
+
+https://inspection.canada.ca/en/animal-health/aquatic-animals/diseases/reportable-diseases/whirling-disease/fact-sheet
+
+
+```{r fish_locations}
+# Fish occurrence records queried from typical data sources.
+all_occs = sf::read_sf(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/5_Incidental Observations/AIS_occurrences_all_sources.gpkg"))
+source("grab_occs_updated_path.R")
+# rel_occs = all_occs |> 
+#   dplyr::filter(Species %in% c("Bull trout","Sockeye salmon"))
+
+
+species_names <- c(
+  "Bull Trout", "Sockeye Salmon", "Cutthroat Trout", "Coho Salmon",
+  "Rainbow Trout", "Chinook Salmon", "Mountain Whitefish", 
+  "Atlantic Salmon", "Brown Trout", "Brook Trout"
+)
+if(requery_occs){
+species_occs <- lapply(species_names, function(sp) {
+  ocs<-suppressMessages(suppressWarnings(grab_aq_occ_data_path_update(sp, quiet = TRUE)))
+   if (!is.null(ocs)) {
+    outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
+    sf::write_sf(ocs, outfile)
+  }
+  return(ocs)
+})
+
+}else{
+  species_occs <- lapply(species_names, function(sp) {
+    sf::read_sf(paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg"))
+  })
+}
+names(species_occs) <- gsub(" ", "_", species_names)
+
+bc = bcmaps::bc_bound() |> 
+  sf::st_transform(4326)
+fish_occs <- bind_rows(species_occs, .id = "species")
+
+ggplot() + 
+  geom_sf(data = bc, color = "lightgrey") + 
+  geom_sf(data = fish_occs) +
+  facet_wrap( ~ Species)+
+  theme_minimal()
+  
+```
+
+
+#### High Priority Species
+
+The species with deemed to have the highest susceptability are widely distributed throughout the province
+
+```{r high_priority_species}
+
+high_priority_species <- c(
+  "Sockeye Salmon", "Rainbow Trout", "Cutthroat Trout"
+)
+
+selected_sp <- fish_occs |> 
+  filter(Species %in% high_priority_species)
+
+
+ggplot() +
+  geom_sf(data = bc, color = "lightgrey") + 
+  geom_sf(data = selected_sp, aes (color = Species), size = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  facet_wrap( ~ Species)+
+  theme_minimal()+
+  labs(title = "High Priority Fish Species Occurrences in BC",
+       subtitle = "Species: Sockeye Salmon, Rainbow (Steelhead) Trout, Cutthroat Trout")
+
+
+
+```
+
+```{r minAirTemps}
+
+# Find only the files with "Min.monthlyairtemperaturefor" in their filename
+min_temp_files <- grep("Min\\.monthlyairtemperaturefor", hydroclim_layers_in_onedrive, value = TRUE)
+
+
+# Extract clean layer names from filenames for use as list names
+min_temp_names <- gsub("_rast\\.tif$", "", basename(min_temp_files))
+
+# Load rasters into a named list
+min_hydroclim <- lapply(seq_along(min_temp_files), function(i) {
+  r <- rast(min_temp_files[i])
+  names(r) <- min_temp_names[i]
+  r
+})
+names(min_hydroclim) <- min_temp_names
+
+```
+
+#### Overlap of Hydroclim temperatures and Fish Occurrences
+
+The hydroclim data is the average minimum temperature across the province, at 2km resolution. For each month, the tmperature where each fish occurrence is located is extracted, and then the fish occurrences are subsetted to only those that are greater than 10 degrees and less than 17 degrees.
+
+
+```{r subset temps by spp occs}
+
+# for each fish occurrence, get the montly temperature at that associated temperature.
+# we will build a data frame for each point showing the location, month and temperature
+
+# List of month names for ordering
+month_names <- gsub("bc_Min.monthlyairtemperaturefor|_", "", names(min_hydroclim))
+month_names <- gsub("_", "", month_names)
+
+test<-selected_sp
+selected_sp<-test
+if (inherits(selected_sp, "sf")) {
+  selected_sp_vect <- terra::vect(selected_sp)  # this preserves geometry
+} else {
+  stop("selected_sp must be an sf object")
+}
+
+# Load raster stack
+min_hydroclim_stack <- terra::rast(min_hydroclim)
+
+# Extract raster values
+extracted_values <- terra::extract(min_hydroclim_stack, selected_sp_vect)
+
+# Add fish_id for merging
+selected_sp$fish_id <- 1:nrow(selected_sp)
+
+# Add lon/lat columns to sf object for later plotting
+selected_sp$lon <- sf::st_coordinates(selected_sp)[, 1]
+selected_sp$lat <- sf::st_coordinates(selected_sp)[, 2]
+
+# Merge the extracted temperature values with the spatial data
+fish_temps_df_wide <- merge(
+  as.data.frame(selected_sp),
+  extracted_values,
+  by.x = "fish_id",
+  by.y = "ID",
+  all.x = TRUE
+)
+
+# Rename the monthly temperature columns
+names(fish_temps_df_wide)[grep("bc_Min.monthlyairtemperaturefor", names(fish_temps_df_wide))] <- month_names
+
+# Pivot to long format
+fish_temps_df_long <- pivot_longer(
+  fish_temps_df_wide,
+  cols = all_of(month_names),
+  names_to = "month",
+  values_to = "temperature"
+)
+
+# Filter by temperature range
+fish_temps_df_long <- fish_temps_df_long %>%
+  filter(temperature >= 10, temperature <= 17)
+
+# Convert to sf using saved lon/lat
+fish_temps_df_long <- sf::st_as_sf(fish_temps_df_long, coords = c("lon", "lat"), crs = 4326)
+
+# Set month factor levels for plotting
+fish_temps_df_long$month <- factor(
+  fish_temps_df_long$month,
+  levels = c("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December")
+)
+
+# Plot
+ggplot() +
+  geom_sf(data = bc, color = "lightgrey") +
+  geom_sf(data = fish_temps_df_long, aes(color = Species), size = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  facet_wrap(~ month) +
+  theme_minimal() +
+  labs(
+    title = "Fish Occurrences with Temperatures Between 10°C and 17°C",
+    subtitle = "Faceted by Month"
+  )+
+   guides(color = guide_legend(override.aes = list(size = 2))) 
+
+
+```
+
+
+#### Filtering Aquarius temperature data
+
+
+
+
+
