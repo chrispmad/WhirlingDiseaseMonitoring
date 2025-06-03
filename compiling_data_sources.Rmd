@@ -16,6 +16,8 @@ library(DBI)
 library(tidyverse)
 library(bcinvadeR)
 library(bcdata)
+library(leaflet)
+library(leafpop)
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
@@ -54,7 +56,7 @@ terra::plot(hydroclim)
 Layers currently available based on Hydroclim data: `r hydroclim_layer_names`.
 
 #### EMS Water Temperature
-```{r}
+```{r ems_water}
 
 # The following path will work on Chris' computer. Not on Johns, though.
 #path_to_EMS = paste0(base_dir,"/Downloads/LocalR/long_term_projects/EMS/output/EMS.sqlite")
@@ -74,6 +76,7 @@ ems_wt = DBI::dbGetQuery(ems_db, "select * from results where PARAMETER like 'Te
 ems_wt = ems_wt |> 
   dplyr::mutate(the_date = lubridate::ymd_hms(COLLECTION_START)) |> 
   dplyr::mutate(the_year = lubridate::year(the_date))
+
 
 ems_wt<-ems_wt |> 
     dplyr::filter(!is.na(RESULT)) %>% 
@@ -159,6 +162,79 @@ ggplot() +
   facet_wrap( ~ PARAMETER)
 ```
 
+
+#### BC Aquarius Data
+
+The BC Aquarius data is comprised of a range of temperature readings from across the province. There are a lot of data, with varying temporal scales. Information on the purpose of the readings is limited. This could be a great resource for waterbody specific data, where we can see trends in the waterbody's temperature and link this to key points in fish, tubifex and M. cerebralis life stages. 
+
+I am waiting on API access, then we should be able to query the data. Currently we can download data from: https://www.env.gov.bc.ca/wsd/data_searches/water/
+
+Data has just been averaged, with min and max temperatures also recorded. The dates for each of the locations are available in the leaflet map, when hovering.
+
+```{r get_aquarius_data}
+
+aqua_data<-read.csv("data/WaterTemperature.csv")
+
+names(aqua_data) = gsub("\\.", "_", names(aqua_data))
+
+aqua_data_monthly<-aqua_data |> 
+  mutate(Date_Time_UTC_ = lubridate::ymd_hms(Date_Time_UTC_)) |> 
+  mutate(month = floor_date(Date_Time_UTC_, unit = "month")) |> 
+  group_by(Location_Name, Latitude, Longitude) |> 
+  summarise(
+    mean_temp = mean(Value, na.rm = TRUE),
+    min_temp = min(Value, na.rm = TRUE),
+    max_temp = max(Value, na.rm = TRUE),
+    n_readings = sum(!is.na(Value)),
+    min_date = min(Date_Time_UTC_, na.rm = TRUE),
+    max_date = max(Date_Time_UTC_, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+### Filter out the location with temperatures above 50 degrees average
+aqua_data_monthly <- aqua_data_monthly |> 
+  filter(mean_temp < 50)
+
+aqua_monthly_sf<-sf::st_as_sf(aqua_data_monthly, coords = c("Longitude", "Latitude"), crs = 4326)
+  
+
+ggplot()+ 
+  geom_sf(data = bc) + 
+  geom_sf(data = aqua_monthly_sf, aes(color = mean_temp)) +
+  scale_color_viridis_c() +
+  labs(title = "Mean Water Temperature from BC Aquarius Data", color = "Mean Temp (°C)") +
+  theme_minimal()
+
+## now a leaflet map, showing the locations and the mean, max, min temperatures and the number of readings
+leaflet(aqua_monthly_sf) |> 
+  addTiles() |> 
+  addCircleMarkers(
+    radius = 2,  # You can replace this with a scaling function based on n_readings if desired
+    color = ~colorNumeric("viridis", mean_temp)(mean_temp),
+    fillOpacity = 0.7,
+    popup = popupTable(
+      aqua_monthly_sf,
+      zcol = c("Location_Name", "mean_temp", "min_temp", "max_temp", "min_date", "max_date", "n_readings")
+    )
+  ) |> 
+  addLegend(
+    position = "bottomright",
+    pal = colorNumeric("viridis", aqua_monthly_sf$mean_temp),
+    values = aqua_monthly_sf$mean_temp,
+    title = "Mean Temperature (°C)"
+  )
+
+aqua_data_monthly |> 
+  DT::datatable(
+    options = list(pageLength = 10, autoWidth = TRUE),
+    rownames = FALSE,
+    filter = "top"
+  )
+
+```
+
+
+
 #### Fish Occurrence Records
 ```{r}
 # Fish occurrence records queried from typical data sources.
@@ -187,8 +263,7 @@ ggplot() +
   facet_wrap( ~ Species)
 ```
 
-##### Angler Use
-
+#### Angler Use
 This is the DFO data layer of angler use, with the scale being the number of days fished.
 ```{r plot_angler_use}
 
@@ -206,19 +281,49 @@ ggplot()+
 
 #### Watercraft Inspections
 
-```{r}
+These data contain the 
 
+```{r water_craft_inspections}
+
+library(patchwork)
 watercraftInspections<-sf::read_sf("W:/CMadsen/shared_data_sets/Waterbodies_with_Inspection_Data_Summaries.gpkg")
 
-ggplot()+
+p1<-ggplot()+
   geom_sf(data = bc) + 
   geom_sf(data = watercraftInspections, aes(color = TotalInspections)) +
   scale_color_viridis_c() +
   labs(title = "Watercraft Inspections", color = "Inspection Count") +
   theme_minimal()
 
+p2<-ggplot()+
+  geom_sf(data = bc) + 
+  geom_sf(data = watercraftInspections, aes(color = NumberHighRisk)) +
+  scale_color_viridis_c() +
+  labs(title = "Watercraft Inspections", color = "No. high risk watercraft") +
+  theme_minimal()
+
+p1
+
+p2
+
+
 ```
 
+
+#### Distance to roads
+
+The distance to numbered highways is a raster layer that shows the distance to the nearest numbered highway in meters. 
+```{r plot_road_distances}
+
+road_distances<-terra::rast(paste0(onedrive_wd,"CNF/distance_to_numbered_highway_raster.tif"))
+
+ggplot()+
+  geom_sf(data = bc) + 
+  geom_raster(data = as.data.frame(road_distances, xy = TRUE), aes(x = x, y = y, fill = layer)) +
+  scale_fill_viridis_c() +
+  labs(title = "Distance to Numbered Highways", fill = "Distance (m)") +
+  theme_minimal()
+```
 
 
 
