@@ -11,7 +11,7 @@ names(aqua_data) <- gsub("\\.", "_", names(aqua_data))
 
 aqua_data_limits <- aqua_data |> 
   filter(!is.na(Value)) |>
-  filter(Value < 50)  #
+  filter(Value < 50)  # Get rid of the large numbers
 
 
 aqua_limits_sf <- st_as_sf(aqua_data_limits, coords = c("Longitude", "Latitude"), crs = 4326)
@@ -25,7 +25,7 @@ aqua_limits_sf <- aqua_limits_sf |>
   )
 
 
-summary_data <- aqua_limits_sf %>%
+summary_data <- aqua_limits_sf |> 
   group_by(Location_ID, Location_Name, year, month, geometry) %>%
   summarise(
     mean_temp = mean(Value, na.rm = TRUE),
@@ -33,7 +33,7 @@ summary_data <- aqua_limits_sf %>%
     max_temp = max(Value, na.rm = TRUE),
     sd_temp   = sd(Value, na.rm = TRUE),
     .groups = "drop"
-  ) %>%
+  ) |> 
   st_as_sf()
 
 
