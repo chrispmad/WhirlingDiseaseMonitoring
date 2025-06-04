@@ -286,18 +286,20 @@ These data contain the
 ```{r water_craft_inspections}
 
 library(patchwork)
-watercraftInspections<-sf::read_sf("W:/CMadsen/shared_data_sets/Waterbodies_with_Inspection_Data_Summaries.gpkg")
+#watercraftInspections<-sf::read_sf("W:/CMadsen/shared_data_sets/Waterbodies_with_Inspection_Data_Summaries.gpkg")
+
+watercraft2<-sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years.gpkg")
 
 p1<-ggplot()+
   geom_sf(data = bc) + 
-  geom_sf(data = watercraftInspections, aes(color = TotalInspections)) +
+  geom_sf(data = watercraft2, aes(color = TotalInspections)) +
   scale_color_viridis_c() +
   labs(title = "Watercraft Inspections", color = "Inspection Count") +
   theme_minimal()
 
 p2<-ggplot()+
   geom_sf(data = bc) + 
-  geom_sf(data = watercraftInspections, aes(color = NumberHighRisk)) +
+  geom_sf(data = watercraft2, aes(color = highrisk_Counter)) +
   scale_color_viridis_c() +
   labs(title = "Watercraft Inspections", color = "No. high risk watercraft") +
   theme_minimal()
