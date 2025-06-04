@@ -17,6 +17,7 @@ library(bcdata)
 library(RColorBrewer)
 library(leaflet)
 library(leafpop)
+library(readxl)
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
@@ -237,9 +238,195 @@ ggplot() +
 
 ```
 
+#### Positive locations
+
+```{r get_WD_results}
+
+lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
+proj_wd = getwd()
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+
+# Data
+# Copy excel results from LAN folder IF it has all the right columns. This is
+# intended to save us from overwriting the local data with some garbage 
+# LAN file that has replaced our goldenboy data file.
+new_potential_dat_file = read_excel(paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"), sheet = "Fish and eDNA")
+local_data_file = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx')
+
+if(identical(names(new_potential_dat_file),names(local_data_file)) & nrow(new_potential_dat_file) == nrow(local_data_file)){
+  print("New data file has identical column names and number of rows. Copying locally...")
+  file.copy(from = paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"),
+            to = paste0('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx'),
+            overwrite = T)
+}
+
+dat = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx', sheet = "Fish and eDNA")
+
+dat = purrr::set_names(dat, snakecase::to_snake_case)
+
+dat = dat |> filter(!is.na(lat) & !is.na(long))
+
+# Split rows that have both eDNA and fish sampling into two rows each.
+dat = dat |> 
+  tidyr::separate_longer_delim(cols = sampling_method, delim = " + ")
+
+dat = sf::st_as_sf(dat, coords = c("long","lat"), crs = 4326)
+
+# Typo corrections etc.
+dat = dat |> 
+  dplyr::mutate(fish_sampling_results_q_pcr_mc_detected = ifelse(str_detect(fish_sampling_results_q_pcr_mc_detected,"Positive"),"Positive",fish_sampling_results_q_pcr_mc_detected)) |> 
+  dplyr::mutate(comments = ifelse(comments == '', NA, comments))
+
+# --------------------------
+
+col = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp") |> 
+  dplyr::summarise() |> 
+  sf::st_transform(4326)
+
+sf::write_sf(col, "data/columbia_watershed.gpkg")
+
+# ---------------------------
+subw = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp") |> 
+  sf::st_transform(4326) |> 
+  dplyr::select(watershed_name = MAJOR_WA_1)
+
+
+# lets get positive/negative for these results - not the tubifex
+# the data has detected, weak detection, for edna+results_mc - change to pos/neg for now
+dat_plotting<- dat |> 
+  plyr::mutate(e_dna_results_mc = ifelse(str_detect(e_dna_results_mc,"Weak Detection"),"Positive","Negative"))
+
+dat_plotting$geometry[which(sf::st_coordinates(dat_plotting)[,1] == 15.0819)] <- 
+  sf::st_sfc(sf::st_point(c(-115.0819, 49.30667)), crs = 4326) # ask Chris about this one
+#leaflet map of the locations - we can just look at positive and negative for e_dna_results_mc or fish_sampling_results_q_pcr_mc_detected
+leaflet(dat_plotting) |> 
+  addTiles() |> 
+  addPolygons(data = col, fillColor = "transparent", color = "black", weight = 2) |> 
+  addCircleMarkers(
+    data = dat_plotting,
+    radius = 3,
+    color = ~ifelse(e_dna_results_mc == "Positive", "red", "blue"),
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    popup = leafpop::popupTable(
+      dat_plotting,
+      zcol = c("sampling_method", "e_dna_results_mc", "fish_sampling_results_q_pcr_mc_detected")
+    )
+  ) |> 
+  addLegend(
+    position = "bottomright",
+    colors = c("red", "blue"),
+    labels = c("Positive", "Negative"),
+    title = "Sampling Results"
+  )
 
 
 
+```
 
+
+#### Buffer around positives
+
+```{r buffer_filter}
+
+# for the points where there are positives, lets create a 2km buffer around them and 
+# then filter the fish occurrences to only those that are within that buffer.
+buffer_distance <- 20000  
+
+# Transform to a projected CRS suitable for buffering
+dat_plotting_crs <- sf::st_transform(dat_plotting, crs = 3005)
+
+# Filter to points with either eDNA or fish sampling positives
+positive_points <- dat_plotting_crs |>
+  dplyr::filter(e_dna_results_mc == "Positive" | fish_sampling_results_q_pcr_mc_detected == "Positive")
+
+# Create the buffer around those points
+buffered_points <- sf::st_buffer(positive_points, dist = buffer_distance)
+
+ggplot()+geom_sf(data = buffered_points)
+
+
+buffered_points <- sf::st_transform(buffered_points, crs = 4326)
+fish_occs_buffered <- sf::st_filter(fish_occs, buffered_points)
+fish_occs_buffered <- fish_occs_buffered |> 
+  dplyr::filter(!is.na(geom)) |> 
+  dplyr::select(Species, geom, Location)
+
+
+
+ggplot() +
+  geom_sf(data = bc, color = "lightgrey") + 
+  geom_sf(data = fish_occs_buffered, aes(color = Species), size = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_minimal() +
+  labs(title = "Fish Occurrences within the Buffered Zone of Positive Sampling Points") +
+  guides(color = guide_legend(override.aes = list(size = 2)))
+
+```
+
+
+### Buffering by temperature restrictions
+
+```{r buffer_filter_hydroclim}
+# now that we have these points - we should filter by each of the temperatures!
+# Extract the monthly temperatures for the buffered fish occurrences
+extracted_values_buffered <- terra::extract(min_hydroclim_stack, fish_occs_buffered)
+# Add fish_id for merging
+fish_occs_buffered$fish_id <- 1:nrow(fish_occs_buffered)
+# Merge the extracted temperature values with the spatial data
+fish_temps_buffered_wide <- merge(
+  as.data.frame(fish_occs_buffered),
+  extracted_values_buffered,
+  by.x = "fish_id",
+  by.y = "ID",
+  all.x = TRUE
+)
+# Rename the monthly temperature columns
+names(fish_temps_buffered_wide)[grep("bc_Min.monthlyairtemperaturefor", names(fish_temps_buffered_wide))] <- month_names
+# Pivot to long format
+fish_temps_buffered_long <- pivot_longer(
+  fish_temps_buffered_wide,
+  cols = all_of(month_names),
+  names_to = "month",
+  values_to = "temperature"
+)
+# Filter by temperature range
+fish_temps_buffered_long <- fish_temps_buffered_long %>%
+  filter(temperature >= 10, temperature <= 17)
+# Convert to sf using saved lon/lat
+#fish_temps_buffered_long <- sf::st_as_sf(fish_temps_buffered_long, coords = c("lon", "lat"), crs = 4326)
+# Set month factor levels for plotting
+fish_temps_buffered_long$month <- factor(
+  fish_temps_buffered_long$month,
+  levels = c("January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December")
+)
+# Plot
+fish_temps_buffered_long <- sf::st_sf(fish_temps_buffered_long, sf_column_name = "geom")
+
+ggplot() +
+  geom_sf(data = bc, color = "lightgrey") +
+  geom_sf(data = fish_temps_buffered_long, aes(color = Species), size = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  facet_wrap(~ month) +
+  theme_minimal() +
+  labs(
+    title = "Buffered Fish Occurrences with Temperatures Between 10°C and 17°C",
+    subtitle = "Faceted by Month"
+  )+
+   guides(color = guide_legend(override.aes = list(size = 2)))
+
+fish_temps_buffered_long |> 
+  DT::datatable(
+    options = list(pageLength = 10, autoWidth = TRUE),
+    rownames = FALSE,
+    filter = "top",
+    extensions = "Buttons",
+    escape = FALSE,
+    class = "display"
+  )
+
+
+```
 
 
