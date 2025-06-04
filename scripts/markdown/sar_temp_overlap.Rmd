@@ -238,7 +238,6 @@ ggplot() +
 ```
 
 
-#### Filtering Aquarius temperature data
 
 
 
