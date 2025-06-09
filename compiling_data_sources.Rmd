@@ -333,6 +333,23 @@ We also found a Pacific Salmon Foundation ArcGIS Online map that shows a bunch o
 
 [Link to PSF map](https://www.arcgis.com/apps/mapviewer/index.html?webmap=4b89fba48fa14acf8ef2f913bee76144)
 
+#### Aquaculture Licences
+
+Licensing information is available from https://open.canada.ca/data/en/dataset/522d1b67-30d8-4a34-9b62-5da99b1035e6
+
+```{r aquaculture_licences}
+
+landbased<-read.csv("data/aquaculture licensing/licence-permis-landbased-terre-rpt-pac-dfo-mpo-aquaculture-eng.csv")
+
+marine<-read.csv("data/aquaculture licensing/license-permis-mer-mar-rpt-pac-dfo-mpo-aquaculture-eng.csv")
+
+enchancements<-read.csv("data/aquaculture licensing/licence-permis-enhancement-renforcement-rpt-pac-dfo-mpo-aquaculture-eng.csv")
+
+```
+
+
+
+
 #### Docks
 
 ```{r}
