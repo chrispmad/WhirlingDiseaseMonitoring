@@ -59,9 +59,11 @@ Layers currently available based on Hydroclim data: `r hydroclim_layer_names`.
 ```{r ems_water}
 
 # The following path will work on Chris' computer. Not on Johns, though.
-#path_to_EMS = paste0(base_dir,"/Downloads/LocalR/long_term_projects/EMS/output/EMS.sqlite")
-path_to_EMS <- file.path(dirname(onedrive_wd), "R_projects", "EMS", "output", "EMS.sqlite")
-
+if(str_detect(onedrive_wd,"CMADSEN")){
+  path_to_EMS = paste0(base_dir,"/Downloads/LocalR/long_term_projects/EMS/output/EMS.sqlite")
+} else {
+  path_to_EMS <- file.path(dirname(onedrive_wd), "R_projects", "EMS", "output", "EMS.sqlite")
+}
 
 if(file.exists(path_to_EMS)){
   ems_db = DBI::dbConnect(RSQLite::SQLite(), path_to_EMS)
@@ -277,6 +279,123 @@ ggplot()+
   labs(title = "Angler Use (Days Fished)", fill = "Days Fished") +
   theme_minimal()
 
+```
+
+#### Hatchery Facilities
+
+We searched the BC Data Catalogue for hatcheries or 'salmonid enhancement' keywords: no results!
+
+Canada Open Data (hosted federally) has a data source that describes fish health; of the 7,056 rows in this table, 5,357 rows describe some fish health issue at a location that includes the key word "HATCHERY".
+```{r}
+# Nothing in BC data catalogue.
+
+# Canada Open Data portal offers a fish health dataset that describes (some? all?) fisheries in BC.
+# URL: https://open.canada.ca/data/en/dataset/2ece9991-62aa-4b7a-bd7d-4f8f1052cd21
+hatcheries = readr::read_csv("data/Fish_Health_Database.csv") |> 
+  # Replace column names
+  purrr::set_names(nm = c("case","start_date","location_name","lat","long","species","life_stage","etiological")) |> 
+  # Convert lat and lng to numeric
+  dplyr::mutate(lat = as.numeric(lat), long = as.numeric(long)) |> 
+  dplyr::filter(!is.na(lat), !is.na(long)) |>
+  # Drop first row, which was just a double column name (English and French)
+  dplyr::filter(location_name != "NOM DU LIEU")
+
+# Filter for just those rows where we find 'HATCHERY' in the location name field.
+hatcheries = hatcheries |> 
+  dplyr::filter(stringr::str_detect(location_name,"HATCHERY")) |> 
+  # Keep just one row per hatchery.
+  dplyr::select(start_date,location_name,species,lat,long) |> 
+  # Find earliest date in table for each location
+  dplyr::group_by(location_name) |> 
+  dplyr::mutate(earliest_date = min(start_date),
+                species = paste0(unique(species), collapse = ', ')) |> 
+  dplyr::ungroup() |> 
+  dplyr::select(-start_date) |> 
+  dplyr::distinct() |> 
+  sf::st_as_sf(coords = c("long","lat"), crs = 4326)
+
+leaflet() |> 
+  addTiles() |> 
+  addCircleMarkers(
+    data = hatcheries,
+    label = ~location_name,
+    popup = lapply(leafpop::popupTable(
+      hatcheries |> sf::st_drop_geometry()
+      ),htmltools::HTML)
+  )
+```
+
+```{r}
+DT::datatable(hatcheries |> sf::st_drop_geometry())
+```
+
+We also found a Pacific Salmon Foundation ArcGIS Online map that shows a bunch of hatchery locations; We cannot download the data, though.
+
+[Link to PSF map](https://www.arcgis.com/apps/mapviewer/index.html?webmap=4b89fba48fa14acf8ef2f913bee76144)
+
+#### Docks
+
+```{r}
+ramps = readr::read_csv("data/FFSBC_RAMPS_Database.csv")
+
+# Data clean-up
+ramps_sf = ramps |> 
+  dplyr::filter(!is.na(X),!is.na(Y)) |> 
+  # Correct one typo found in the datat
+  dplyr::mutate(Y = ifelse(WBID == "00542UDEN", 5832173, Y)) |> 
+  # Remove some troublesome character encodings in 'Nearest_Town' field
+  dplyr::mutate(Nearest_Town = stringr::str_remove_all(Nearest_Town,"(\xe8,\\?)")) |> 
+  dplyr::group_by(UTM_Zone) |> 
+  dplyr::group_split() |> 
+  purrr::map( ~ {
+    unique_utm_zone = unique(.x$UTM_Zone)
+    utm_zone = dplyr::case_when(
+      unique_utm_zone == 8 ~ 32608,
+      unique_utm_zone == 9 ~ 32609,
+      unique_utm_zone == 10 ~ 32610,
+      unique_utm_zone == 11 ~ 32611
+    )
+    .x |> 
+      sf::st_as_sf(coords = c("X","Y"),
+                   crs = utm_zone) |> 
+      sf::st_transform(4326)
+  }) |> 
+  dplyr::bind_rows()
+
+boats_sf = ramps_sf |>
+  dplyr::filter(Boat_Launches != "NO")
+
+popup_tbls = leafpop::popupTable(
+        boats_sf |> 
+          sf::st_drop_geometry() |> 
+          dplyr::select(
+            WBID,
+            Gazetted_Name,
+            Nearest_Town,
+            Source_Lake_Parameters,
+            Area_Surface_ha,
+            Depth_Max_m,
+            Depth_Mean_m,
+            Boat_Launches,
+            Access_Info_Source,
+            AvgOfpH
+          )
+      )
+
+leaflet() |> 
+  addTiles() |> 
+  addCircleMarkers(
+    data = boats_sf,
+    label = ~dplyr::coalesce(Gazetted_Name,WBID),
+    popup = lapply(
+      popup_tbls,
+      htmltools::HTML
+    )
+  )
+
+DT::datatable(boats_sf |> 
+                dplyr::select(-c(UTM_Zone,Lat,Longitude)) |> 
+                sf::st_drop_geometry())
 ```
 
 #### Watercraft Inspections
