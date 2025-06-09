@@ -332,3 +332,8 @@ ggplot()+
 #### Fish Periodicity
 
 I'm just waiting on Amy Sigvaldson's work to amalgamate edits from Ron Ptolemy, DFO, and other groups to finalize the fish periodicity file. This file describes when species' life stages occur in major rivers.
+
+Amy's data is at: `\\sfp.idir.bcgov\s140\S40203\WFC AEB\General\2 Stewardship Mgt Climate Change\Drought\Communications\Periodicity tables`
+
+
+
