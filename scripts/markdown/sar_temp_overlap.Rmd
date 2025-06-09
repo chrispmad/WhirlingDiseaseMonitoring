@@ -18,6 +18,7 @@ library(RColorBrewer)
 library(leaflet)
 library(leafpop)
 library(readxl)
+library(sf)
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
@@ -343,7 +344,7 @@ positive_points <- dat_plotting_crs |>
 # Create the buffer around those points
 buffered_points <- sf::st_buffer(positive_points, dist = buffer_distance)
 
-ggplot()+geom_sf(data = buffered_points)
+#ggplot()+geom_sf(data = buffered_points)
 
 
 buffered_points <- sf::st_transform(buffered_points, crs = 4326)
@@ -417,6 +418,9 @@ ggplot() +
    guides(color = guide_legend(override.aes = list(size = 2)))
 
 fish_temps_buffered_long |> 
+  dplyr::select(Species, month, temperature, Location) |> 
+  dplyr::mutate(temperature = round(temperature, 2)) |>
+  st_drop_geometry() |> 
   DT::datatable(
     options = list(pageLength = 10, autoWidth = TRUE),
     rownames = FALSE,
@@ -424,7 +428,7 @@ fish_temps_buffered_long |>
     extensions = "Buttons",
     escape = FALSE,
     class = "display"
-  )
+  ) 
 
 
 ```
