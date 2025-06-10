@@ -448,17 +448,19 @@ fish_temps_buffered_long |>
 
 These are the named waterbodies within the subwatersheds where there have been positive fish results or suspected eDNA results.
 
-```{r}
+```{r watershed waterbody overlap}
 
 #get waterbodies within the subwatersheds with positive results
 
 ws_rivers <- bcdata::bcdc_query_geodata('freshwater-atlas-rivers') |>
   filter(`WATERSHED_GROUP_CODE` %in% subw_pos$WATERSHED_GROUP_CODE) |> 
-  collect()
+  collect() |> 
+  st_transform(4326)
 
 ws_lakes<-bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |>
   filter(`WATERSHED_GROUP_CODE` %in% subw_pos$WATERSHED_GROUP_CODE) |> 
-  collect()
+  collect()|> 
+  st_transform(4326)
 
 bbox<- st_bbox(ws_rivers)
 
