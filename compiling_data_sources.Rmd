@@ -18,6 +18,7 @@ library(bcinvadeR)
 library(bcdata)
 library(leaflet)
 library(leafpop)
+library(htmltools)
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
@@ -344,6 +345,61 @@ landbased<-read.csv("data/aquaculture licensing/licence-permis-landbased-terre-r
 marine<-read.csv("data/aquaculture licensing/license-permis-mer-mar-rpt-pac-dfo-mpo-aquaculture-eng.csv")
 
 enchancements<-read.csv("data/aquaculture licensing/licence-permis-enhancement-renforcement-rpt-pac-dfo-mpo-aquaculture-eng.csv")
+
+landbased_salmonids<-landbased |> 
+  filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
+
+marine_salmonids<-marine |>
+  filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
+
+enchancements_salmonids<-enchancements |>
+  filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
+
+leaflet() |>
+  addTiles() |>
+
+  # Land-based salmonids
+  addCircleMarkers(
+    data = sf::st_as_sf(landbased_salmonids, coords = c("Longitude", "Latitude"), crs = 4326),
+    color = "blue",
+    fillOpacity = 0.7,
+    radius = 6,
+    popup = lapply(
+      popupTable(landbased_salmonids |> sf::st_drop_geometry()),
+      HTML
+    )
+  ) |>
+
+  # Marine salmonids
+  addCircleMarkers(
+    data = sf::st_as_sf(marine_salmonids, coords = c("Longitude", "Latitude"), crs = 4326),
+    color = "green",
+    fillOpacity = 0.7,
+    radius = 6,
+    popup = lapply(
+      popupTable(marine_salmonids |> sf::st_drop_geometry()),
+      HTML
+    )
+  ) |>
+
+  # Enhancement salmonids
+  addCircleMarkers(
+    data = sf::st_as_sf(enchancements_salmonids, coords = c("Longitude", "Latitude"), crs = 4326),
+    color = "red",
+    fillOpacity = 0.7,
+    radius = 6,
+    popup = lapply(
+      popupTable(enchancements_salmonids |> sf::st_drop_geometry()),
+      HTML
+    )
+  ) |> 
+  addLegend(
+    position = "bottomleft",
+    colors = c("blue", "green", "red"),
+    labels = c("Land-based Salmonids", "Marine Salmonids", "Enhancements Salmonids"),
+    title = "Salmonid Types",
+    opacity = 0.7
+  )
 
 ```
 
