@@ -39,6 +39,26 @@ nrowc = function(dat){
   - Occurrence data for fish species that are sensitive to Whirling Disease: Bull Trout, Sockeye Salmon, others?
   - Fish Life-stage History / Seasonality
 
+#### Watershed Groups
+
+These are the spatial units that we use to filter the province for abiotic conditions. There are 246 of them in BC.
+
+```{r}
+if(!file.exists("data/freshwater_atlas_named_watersheds.gpkg")){
+  ws = bcdata::bcdc_query_geodata('freshwater-atlas-watershed-groups') |> # 11,580
+    bcdata::collect()
+  ws = sf::st_transform(ws, 4326)
+  sf::write_sf(ws, "data/freshwater_atlas_watershed_groups.gpkg")
+  ws = sf::st_simplify(ws)
+  sf::write_sf(ws, "data/freshwater_atlas_watershed_groups_simplified.gpkg")
+} else {
+  ws = sf::read_sf("data/freshwater_atlas_watershed_groups_simplified.gpkg")
+}
+
+ggplot() + 
+  geom_sf(data = ws)
+```
+
 #### Hydroclim
 ```{r get_hydroclim}
 hydroclim_layers_in_onedrive = list.files(

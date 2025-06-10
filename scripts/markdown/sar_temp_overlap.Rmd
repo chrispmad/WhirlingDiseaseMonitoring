@@ -1,8 +1,10 @@
 ---
 title: "fish_temp_overlap"
-author: "John Phelan"
-date: "2025-05-28"
+author: "John Phelan & Chris Madsen"
+date: "`r Sys.Date()`"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -97,6 +99,7 @@ names(species_occs) <- gsub(" ", "_", species_names)
 
 bc = bcmaps::bc_bound() |> 
   sf::st_transform(4326)
+
 fish_occs <- bind_rows(species_occs, .id = "species")
 
 ggplot() + 
@@ -130,8 +133,7 @@ names(min_hydroclim) <- min_temp_names
 
 #### Overlap of Hydroclim temperatures and Fish Occurrences
 
-The hydroclim data is the average minimum temperature across the province, at 2km resolution. For each month, the tmperature where each fish occurrence is located is extracted, and then the fish occurrences are subsetted to only those that are greater than 10 degrees and less than 17 degrees.
-
+The air temperature data ("Hydroclim") is the average minimum temperature across the province, at 2km resolution. For each month, the temperature at each fish occurrence is extracted and fish occurrences are filtered to only those with air temperature greater than 10 degrees Celsius.
 
 ```{r subset temps by spp occs}
 
@@ -184,8 +186,9 @@ fish_temps_df_long <- pivot_longer(
 )
 
 # Filter by temperature range
-fish_temps_df_long <- fish_temps_df_long %>%
-  filter(temperature >= 10, temperature <= 17)
+fish_temps_df_long <- fish_temps_df_long |> 
+  # filter(temperature >= 10, temperature <= 17)
+  filter(temperature >= 10)
 
 # Convert to sf using saved lon/lat
 fish_temps_df_long <- sf::st_as_sf(fish_temps_df_long, coords = c("lon", "lat"), crs = 4326)
@@ -205,7 +208,8 @@ ggplot() +
   facet_wrap(~ month) +
   theme_minimal() +
   labs(
-    title = "Fish Occurrences with Temperatures Between 10°C and 17°C"
+    # title = "Fish Occurrences with Temperatures Between 10°C and 17°C"
+    title = "Fish Occurrences with Air Temperatures Above 10°C"
   )+
    guides(color = guide_legend(override.aes = list(size = 2))) 
 
@@ -214,6 +218,7 @@ ggplot() +
 
 #### Positive locations
 
+Link to Whirling Disease Dashboard: https://bcgov-env.shinyapps.io/BCWhirlingDiseaseDashboard
 ```{r get_WD_results}
 
 lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
@@ -222,9 +227,10 @@ onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Governm
 
 # Data
 # Copy excel results from LAN folder IF it has all the right columns. This is
-# intended to save us from overwriting the local data with some garbage 
+# intended to save us from overwriting the local data with some garbage
 # LAN file that has replaced our goldenboy data file.
 new_potential_dat_file = read_excel(paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"), sheet = "Fish and eDNA")
+
 local_data_file = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx')
 
 if(identical(names(new_potential_dat_file),names(local_data_file)) & nrow(new_potential_dat_file) == nrow(local_data_file)){
@@ -241,71 +247,83 @@ dat = purrr::set_names(dat, snakecase::to_snake_case)
 dat = dat |> filter(!is.na(lat) & !is.na(long))
 
 # Split rows that have both eDNA and fish sampling into two rows each.
-dat = dat |> 
+dat = dat |>
   tidyr::separate_longer_delim(cols = sampling_method, delim = " + ")
 
 dat = sf::st_as_sf(dat, coords = c("long","lat"), crs = 4326)
 
 # Typo corrections etc.
-dat = dat |> 
-  dplyr::mutate(fish_sampling_results_q_pcr_mc_detected = ifelse(str_detect(fish_sampling_results_q_pcr_mc_detected,"Positive"),"Positive",fish_sampling_results_q_pcr_mc_detected)) |> 
+dat = dat |>
+  dplyr::mutate(fish_sampling_results_q_pcr_mc_detected = ifelse(str_detect(fish_sampling_results_q_pcr_mc_detected,"Positive"),"Positive",fish_sampling_results_q_pcr_mc_detected)) |>
   dplyr::mutate(comments = ifelse(comments == '', NA, comments))
 
 # --------------------------
 
-col = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp") |> 
-  dplyr::summarise() |> 
+col = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp") |>
+  dplyr::summarise() |>
   sf::st_transform(4326)
 
 sf::write_sf(col, "data/columbia_watershed.gpkg")
 
 # ---------------------------
-subw = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp") |> 
-  sf::st_transform(4326) |> 
+subw = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp") |>
+  sf::st_transform(4326) |>
   dplyr::select(watershed_name = MAJOR_WA_1)
 
 
 # lets get positive/negative for these results - not the tubifex
 # the data has detected, weak detection, for edna+results_mc - change to pos/neg for now
-dat_plotting<- dat |> 
+dat_plotting<- dat |>
   plyr::mutate(e_dna_results_mc = ifelse(str_detect(e_dna_results_mc,"Weak Detection"),"Positive","Negative"))
 
-dat_plotting$geometry[which(sf::st_coordinates(dat_plotting)[,1] == 15.0819)] <- 
+dat_plotting$geometry[which(sf::st_coordinates(dat_plotting)[,1] == 15.0819)] <-
   sf::st_sfc(sf::st_point(c(-115.0819, 49.30667)), crs = 4326) # ask Chris about this one
-#leaflet map of the locations - we can just look at positive and negative for e_dna_results_mc or fish_sampling_results_q_pcr_mc_detected
-leaflet(dat_plotting) |> 
-  addTiles() |> 
-  addPolygons(data = col, fillColor = "transparent", color = "black", weight = 2) |> 
-  addCircleMarkers(
-    data = dat_plotting,
-    radius = 3,
-    color = ~ifelse(e_dna_results_mc == "Positive", "red", "blue"),
-    stroke = FALSE,
-    fillOpacity = 0.8,
-    popup = leafpop::popupTable(
-      dat_plotting,
-      zcol = c("sampling_method", "e_dna_results_mc", "fish_sampling_results_q_pcr_mc_detected")
-    )
-  ) |> 
-  addLegend(
-    position = "bottomright",
-    colors = c("red", "blue"),
-    labels = c("Positive", "Negative"),
-    title = "Sampling Results"
-  )
+# #leaflet map of the locations - we can just look at positive and negative for e_dna_results_mc or fish_sampling_results_q_pcr_mc_detected
+# leaflet(dat_plotting) |> 
+#   addTiles() |> 
+#   addPolygons(data = col, fillColor = "transparent", color = "black", weight = 2) |> 
+#   addCircleMarkers(
+#     data = dat_plotting,
+#     radius = 3,
+#     color = ~ifelse(e_dna_results_mc == "Positive", "red", "blue"),
+#     stroke = FALSE,
+#     fillOpacity = 0.8,
+#     popup = leafpop::popupTable(
+#       dat_plotting,
+#       zcol = c("sampling_method", "e_dna_results_mc", "fish_sampling_results_q_pcr_mc_detected")
+#     )
+#   ) |> 
+#   addLegend(
+#     position = "bottomright",
+#     colors = c("red", "blue"),
+#     labels = c("Positive", "Negative"),
+#     title = "Sampling Results"
+#   )
 
+
+# Snag data directly from WD dashboard
+
+# if(interactive()){
+#   wd_res = sf::read_sf("../WhirlingDiseaseDashboard/app/www/sampling_results.gpkg")
+#   col_ws = sf::read_sf("../WhirlingDiseaseDashboard/app/www/columbia_watershed.gpkg")
+# } else {
+#   wd_res = sf::read_sf("../../../WhirlingDiseaseDashboard/app/www/sampling_results.gpkg")
+#   col_ws = sf::read_sf("../../../WhirlingDiseaseDashboard/app/www/columbia_watershed.gpkg")
+# }
 
 
 ```
 
+#### Assess watershed groups with parasite results
 
-#### Buffer around positives
+Either positive fish samples or suspect eDNA results.
 
-```{r buffer_filter}
+```{r subw_with_positive_results}
 
+subw = sf::read_sf("data/freshwater_atlas_watershed_groups_simplified.gpkg")
 # for the points where there are positives, lets create a 2km buffer around them and 
 # then filter the fish occurrences to only those that are within that buffer.
-buffer_distance <- 20000  
+# buffer_distance <- 20000
 
 # Transform to a projected CRS suitable for buffering
 dat_plotting_crs <- sf::st_transform(dat_plotting, crs = 3005)
@@ -314,30 +332,31 @@ dat_plotting_crs <- sf::st_transform(dat_plotting, crs = 3005)
 positive_points <- dat_plotting_crs |>
   dplyr::filter(e_dna_results_mc == "Positive" | fish_sampling_results_q_pcr_mc_detected == "Positive")
 
+# Join the positive points to watergroup groups
+subw_pos = subw |> 
+  sf::st_filter(sf::st_transform(positive_points,4326))
+
 # Create the buffer around those points
-buffered_points <- sf::st_buffer(positive_points, dist = buffer_distance)
+# buffered_points <- sf::st_buffer(positive_points, dist = buffer_distance)
 
 #ggplot()+geom_sf(data = buffered_points)
 
 
-buffered_points <- sf::st_transform(buffered_points, crs = 4326)
-fish_occs_buffered <- sf::st_filter(fish_occs, buffered_points)
+# buffered_points <- sf::st_transform(buffered_points, crs = 4326)
+fish_occs_buffered <- sf::st_filter(fish_occs, subw_pos)
 fish_occs_buffered <- fish_occs_buffered |> 
   dplyr::filter(!is.na(geom)) |> 
   dplyr::select(Species, geom, Location)
-
-
 
 ggplot() +
   geom_sf(data = bc, color = "lightgrey") + 
   geom_sf(data = fish_occs_buffered, aes(color = Species), size = 0.75) +
   scale_color_brewer(palette = "Dark2") +
   theme_minimal() +
-  labs(title = "Fish Occurrences within the Buffered Zone of Positive Sampling Points") +
+  labs(title = "Fish Occurrences within the Watershed Groups with Positive Sampling Results") +
   guides(color = guide_legend(override.aes = list(size = 2)))
 
 ```
-
 
 ### Buffering by temperature restrictions
 
@@ -366,7 +385,9 @@ fish_temps_buffered_long <- pivot_longer(
 )
 # Filter by temperature range
 fish_temps_buffered_long <- fish_temps_buffered_long %>%
-  filter(temperature >= 10, temperature <= 17)
+  # filter(temperature >= 10, temperature <= 17)
+  filter(temperature >= 10)
+
 # Convert to sf using saved lon/lat
 #fish_temps_buffered_long <- sf::st_as_sf(fish_temps_buffered_long, coords = c("lon", "lat"), crs = 4326)
 # Set month factor levels for plotting
@@ -385,7 +406,7 @@ ggplot() +
   facet_wrap(~ month) +
   theme_minimal() +
   labs(
-    title = "Buffered Fish Occurrences with Temperatures Between 10°C and 17°C",
+    title = "Buffered Fish Occurrences with Temperatures Above 10°C Air Temperature",
     subtitle = "Faceted by Month"
   )+
    guides(color = guide_legend(override.aes = list(size = 2)))
@@ -406,33 +427,31 @@ fish_temps_buffered_long |>
 
 ```
 
+```{r}
+# #### Species with high susceptibility to whirling disease
+# 
+# These species have been deemed to have the highest susceptibility are widely distributed throughout the province
+# 
+# ```{r high_priority_species}
+# 
+# high_priority_species <- c(
+#   "Sockeye Salmon", "Rainbow Trout", "Cutthroat Trout"
+# )
+# 
+# selected_sp <- fish_occs |> 
+#   filter(Species %in% high_priority_species)
+# 
+# 
+# ggplot() +
+#   geom_sf(data = bc, color = "lightgrey") + 
+#   geom_sf(data = selected_sp, aes (color = Species), size = 0.75) +
+#   scale_color_brewer(palette = "Dark2") +
+#   facet_wrap( ~ Species)+
+#   theme_minimal()+
+#   labs(title = "High Priority Fish Species Occurrences in BC",
+#        subtitle = "Species: Sockeye Salmon, Rainbow (Steelhead) Trout, Cutthroat Trout")
+# 
+# 
 
-
-#### Species with high susceptibility to whirling disease
-
-The species with deemed to have the highest susceptibility are widely distributed throughout the province
-
-```{r high_priority_species}
-
-high_priority_species <- c(
-  "Sockeye Salmon", "Rainbow Trout", "Cutthroat Trout"
-)
-
-selected_sp <- fish_occs |> 
-  filter(Species %in% high_priority_species)
-
-
-ggplot() +
-  geom_sf(data = bc, color = "lightgrey") + 
-  geom_sf(data = selected_sp, aes (color = Species), size = 0.75) +
-  scale_color_brewer(palette = "Dark2") +
-  facet_wrap( ~ Species)+
-  theme_minimal()+
-  labs(title = "High Priority Fish Species Occurrences in BC",
-       subtitle = "Species: Sockeye Salmon, Rainbow (Steelhead) Trout, Cutthroat Trout")
-
-
-
+#```
 ```
-
-
