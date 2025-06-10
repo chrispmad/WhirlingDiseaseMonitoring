@@ -190,9 +190,8 @@ ggplot() +
 
 The BC Aquarius data is comprised of a range of temperature readings from across the province. There are a lot of data, with varying temporal scales. Information on the purpose of the readings is limited. This could be a great resource for waterbody specific data, where we can see trends in the waterbody's temperature and link this to key points in fish, tubifex and M. cerebralis life stages. 
 
-I am waiting on API access, then we should be able to query the data. Currently we can download data from: https://www.env.gov.bc.ca/wsd/data_searches/water/
 
-Data has just been averaged, with min and max temperatures also recorded. The dates for each of the locations are available in the leaflet map, when hovering.
+Data has been averaged, with min and max temperatures also recorded. The dates for each of the locations are available in the leaflet map, when hovering.
 
 ```{r get_aquarius_data}
 
@@ -259,6 +258,19 @@ aqua_data_monthly |>
 
 
 #### Fish Occurrence Records
+
+The species that are susseptible to whirling disease are: 
+- Oncorhynchus clarkii (cutthroat trout)
+- Oncorhynchus kisutch (coho salmon)
+- Oncorhynchus mykiss (rainbow trout)
+- Oncorhynchus nerka (sockeye salmon)
+- Oncorhynchus tshawytscha (chinook salmon)
+- Prosopium williamsoni (mountain whitefish)
+- Salmo salar (Atlantic salmon)
+- Salmo trutta (brown trout)
+- Salvelinus confluentus (bull trout)
+- Salvelinus fontinalis (brook trout)
+
 ```{r}
 # Fish occurrence records queried from typical data sources.
 all_occs = sf::read_sf(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/5_Incidental Observations/AIS_occurrences_all_sources.gpkg"))
@@ -267,23 +279,37 @@ source("grab_occs_updated_path.R")
 #   dplyr::filter(Species %in% c("Bull trout","Sockeye salmon"))
 
 # Add queries for Bull Trout and Sockeye Salmon
-if(requery_occs){
-  bt_occs = suppressMessages(suppressWarnings(grab_aq_occ_data_path_update('Bull Trout', quiet = T)))
-  ss_occs = suppressMessages(suppressWarnings(grab_aq_occ_data_path_update('Sockeye Salmon')))
-  
-  sf::write_sf(bt_occs, "data/bull_trout_occurrences.gpkg")
-  sf::write_sf(ss_occs, "data/sockeye_salmon_occurrences.gpkg")
-} else {
-  bt_occs = sf::read_sf("data/bull_trout_occurrences.gpkg")
-  ss_occs = sf::read_sf("data/sockeye_salmon_occurrences.gpkg")
-}
 
-fish_occs = dplyr::bind_rows(bt_occs, ss_occs)
+species_names <- c(
+  "Bull Trout", "Sockeye Salmon", "Cutthroat Trout", "Coho Salmon",
+  "Rainbow Trout", "Chinook Salmon", "Mountain Whitefish", 
+  "Atlantic Salmon", "Brown Trout", "Brook Trout"
+)
+if(requery_occs){
+species_occs <- lapply(species_names, function(sp) {
+  ocs<-suppressMessages(suppressWarnings(grab_aq_occ_data_path_update(sp, quiet = TRUE)))
+   if (!is.null(ocs)) {
+    outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
+    sf::write_sf(ocs, outfile)
+  }
+  return(ocs)
+})
+
+}else{
+  species_occs <- lapply(species_names, function(sp) {
+    sf::read_sf(paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg"))
+  })
+}
+names(species_occs) <- gsub(" ", "_", species_names)
+
+fish_occs <- bind_rows(species_occs, .id = "species")
 
 ggplot() + 
   geom_sf(data = bc) + 
-  geom_sf(data = fish_occs) +
-  facet_wrap( ~ Species)
+  geom_sf(data = fish_occs, aes(color = as.factor(Species)))+
+  facet_wrap( ~ Species)+
+  scale_color_viridis_d() +
+  theme_minimal()
 ```
 
 #### Angler Use
@@ -311,15 +337,15 @@ Licensing information is available from https://open.canada.ca/data/en/dataset/5
 
 landbased<-read.csv("data/aquaculture licensing/licence-permis-landbased-terre-rpt-pac-dfo-mpo-aquaculture-eng.csv")
 
-marine<-read.csv("data/aquaculture licensing/license-permis-mer-mar-rpt-pac-dfo-mpo-aquaculture-eng.csv")
+# marine<-read.csv("data/aquaculture licensing/license-permis-mer-mar-rpt-pac-dfo-mpo-aquaculture-eng.csv")
 
 enchancements<-read.csv("data/aquaculture licensing/licence-permis-enhancement-renforcement-rpt-pac-dfo-mpo-aquaculture-eng.csv")
 
 landbased_salmonids<-landbased |> 
   filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
 
-marine_salmonids<-marine |>
-  filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
+# marine_salmonids<-marine |>
+#   filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
 
 enchancements_salmonids<-enchancements |>
   filter(grepl("Salmon|trout|whitefish", Licensed.Species, ignore.case = TRUE))
@@ -339,22 +365,11 @@ leaflet() |>
     )
   ) |>
 
-  # Marine salmonids
-  addCircleMarkers(
-    data = sf::st_as_sf(marine_salmonids, coords = c("Longitude", "Latitude"), crs = 4326),
-    color = "green",
-    fillOpacity = 0.7,
-    radius = 6,
-    popup = lapply(
-      popupTable(marine_salmonids |> sf::st_drop_geometry()),
-      HTML
-    )
-  ) |>
 
   # Enhancement salmonids
   addCircleMarkers(
     data = sf::st_as_sf(enchancements_salmonids, coords = c("Longitude", "Latitude"), crs = 4326),
-    color = "red",
+    color = "blue",
     fillOpacity = 0.7,
     radius = 6,
     popup = lapply(
@@ -364,8 +379,8 @@ leaflet() |>
   ) |> 
   addLegend(
     position = "bottomleft",
-    colors = c("blue", "green", "red"),
-    labels = c("Land-based Salmonids", "Marine Salmonids", "Enhancements Salmonids"),
+    colors = c("blue"),
+    labels = c("Salmonid production"),
     title = "Salmonid Types",
     opacity = 0.7
   )
@@ -444,7 +459,7 @@ DT::datatable(boats_sf |>
 
 #### Watercraft Inspections
 
-These data contain the 
+
 
 ```{r water_craft_inspections}
 
