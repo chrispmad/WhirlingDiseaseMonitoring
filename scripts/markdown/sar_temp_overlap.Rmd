@@ -108,32 +108,6 @@ ggplot() +
 ```
 
 
-#### High Priority Species
-
-The species with deemed to have the highest susceptability are widely distributed throughout the province
-
-```{r high_priority_species}
-
-high_priority_species <- c(
-  "Sockeye Salmon", "Rainbow Trout", "Cutthroat Trout"
-)
-
-selected_sp <- fish_occs |> 
-  filter(Species %in% high_priority_species)
-
-
-ggplot() +
-  geom_sf(data = bc, color = "lightgrey") + 
-  geom_sf(data = selected_sp, aes (color = Species), size = 0.75) +
-  scale_color_brewer(palette = "Dark2") +
-  facet_wrap( ~ Species)+
-  theme_minimal()+
-  labs(title = "High Priority Fish Species Occurrences in BC",
-       subtitle = "Species: Sockeye Salmon, Rainbow (Steelhead) Trout, Cutthroat Trout")
-
-
-
-```
 
 ```{r minAirTemps}
 
@@ -168,12 +142,12 @@ The hydroclim data is the average minimum temperature across the province, at 2k
 month_names <- gsub("bc_Min.monthlyairtemperaturefor|_", "", names(min_hydroclim))
 month_names <- gsub("_", "", month_names)
 
-test<-selected_sp
-selected_sp<-test
-if (inherits(selected_sp, "sf")) {
-  selected_sp_vect <- terra::vect(selected_sp)  # this preserves geometry
+# test<-selected_sp
+# selected_sp<-test
+if (inherits(fish_occs, "sf")) {
+  selected_sp_vect <- terra::vect(fish_occs)  # this preserves geometry
 } else {
-  stop("selected_sp must be an sf object")
+  stop("fish_occs must be an sf object")
 }
 
 # Load raster stack
@@ -183,15 +157,15 @@ min_hydroclim_stack <- terra::rast(min_hydroclim)
 extracted_values <- terra::extract(min_hydroclim_stack, selected_sp_vect)
 
 # Add fish_id for merging
-selected_sp$fish_id <- 1:nrow(selected_sp)
+fish_occs$fish_id <- 1:nrow(fish_occs)
 
 # Add lon/lat columns to sf object for later plotting
-selected_sp$lon <- sf::st_coordinates(selected_sp)[, 1]
-selected_sp$lat <- sf::st_coordinates(selected_sp)[, 2]
+fish_occs$lon <- sf::st_coordinates(fish_occs)[, 1]
+fish_occs$lat <- sf::st_coordinates(fish_occs)[, 2]
 
 # Merge the extracted temperature values with the spatial data
 fish_temps_df_wide <- merge(
-  as.data.frame(selected_sp),
+  as.data.frame(fish_occs),
   extracted_values,
   by.x = "fish_id",
   by.y = "ID",
@@ -227,12 +201,11 @@ fish_temps_df_long$month <- factor(
 ggplot() +
   geom_sf(data = bc, color = "lightgrey") +
   geom_sf(data = fish_temps_df_long, aes(color = Species), size = 0.75) +
-  scale_color_brewer(palette = "Dark2") +
+  scale_color_viridis_d() +
   facet_wrap(~ month) +
   theme_minimal() +
   labs(
-    title = "Fish Occurrences with Temperatures Between 10°C and 17°C",
-    subtitle = "Faceted by Month"
+    title = "Fish Occurrences with Temperatures Between 10°C and 17°C"
   )+
    guides(color = guide_legend(override.aes = list(size = 2))) 
 
@@ -429,6 +402,35 @@ fish_temps_buffered_long |>
     escape = FALSE,
     class = "display"
   ) 
+
+
+```
+
+
+
+#### Species with high susceptibility to whirling disease
+
+The species with deemed to have the highest susceptibility are widely distributed throughout the province
+
+```{r high_priority_species}
+
+high_priority_species <- c(
+  "Sockeye Salmon", "Rainbow Trout", "Cutthroat Trout"
+)
+
+selected_sp <- fish_occs |> 
+  filter(Species %in% high_priority_species)
+
+
+ggplot() +
+  geom_sf(data = bc, color = "lightgrey") + 
+  geom_sf(data = selected_sp, aes (color = Species), size = 0.75) +
+  scale_color_brewer(palette = "Dark2") +
+  facet_wrap( ~ Species)+
+  theme_minimal()+
+  labs(title = "High Priority Fish Species Occurrences in BC",
+       subtitle = "Species: Sockeye Salmon, Rainbow (Steelhead) Trout, Cutthroat Trout")
+
 
 
 ```
