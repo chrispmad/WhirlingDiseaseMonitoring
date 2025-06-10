@@ -103,9 +103,10 @@ bc = bcmaps::bc_bound() |>
 fish_occs <- bind_rows(species_occs, .id = "species")
 
 ggplot() + 
-  geom_sf(data = bc, color = "lightgrey") + 
-  geom_sf(data = fish_occs) +
+  geom_sf(data = bc) + 
+  geom_sf(data = fish_occs, aes(color = as.factor(Species)))+
   facet_wrap( ~ Species)+
+  scale_color_viridis_d() +
   theme_minimal()
   
 ```
@@ -344,17 +345,28 @@ subw_pos = subw |>
 
 # buffered_points <- sf::st_transform(buffered_points, crs = 4326)
 fish_occs_buffered <- sf::st_filter(fish_occs, subw_pos)
+if('geometry' %in% names(fish_occs_buffered)){
+  fish_occs_buffered = fish_occs_buffered |> 
+    dplyr::rename(geom = geometry)
+}
 fish_occs_buffered <- fish_occs_buffered |> 
   dplyr::filter(!is.na(geom)) |> 
   dplyr::select(Species, geom, Location)
 
+bbox <- st_bbox(fish_occs_buffered)
+
 ggplot() +
   geom_sf(data = bc, color = "lightgrey") + 
+  geom_sf(data = subw_pos, fill = NA, color = "darkgrey", size = 0.5) +
   geom_sf(data = fish_occs_buffered, aes(color = Species), size = 0.75) +
   scale_color_brewer(palette = "Dark2") +
   theme_minimal() +
   labs(title = "Fish Occurrences within the Watershed Groups with Positive Sampling Results") +
-  guides(color = guide_legend(override.aes = list(size = 2)))
+  guides(color = guide_legend(override.aes = list(size = 2))) +
+  coord_sf(
+    xlim = c(bbox["xmin"] - 0.1, bbox["xmax"]+0.1),
+    ylim = c(bbox["ymin"] -0.1, bbox["ymax"]+0.1)
+  )
 
 ```
 
@@ -398,6 +410,7 @@ fish_temps_buffered_long$month <- factor(
 )
 # Plot
 fish_temps_buffered_long <- sf::st_sf(fish_temps_buffered_long, sf_column_name = "geom")
+bbox <- st_bbox(fish_temps_buffered_long)
 
 ggplot() +
   geom_sf(data = bc, color = "lightgrey") +
@@ -409,7 +422,11 @@ ggplot() +
     title = "Buffered Fish Occurrences with Temperatures Above 10°C Air Temperature",
     subtitle = "Faceted by Month"
   )+
-   guides(color = guide_legend(override.aes = list(size = 2)))
+   guides(color = guide_legend(override.aes = list(size = 2)))+
+  coord_sf(
+    xlim = c(bbox["xmin"] - 0.1, bbox["xmax"]+0.1),
+    ylim = c(bbox["ymin"] -0.1, bbox["ymax"]+0.1)
+  )
 
 fish_temps_buffered_long |> 
   dplyr::select(Species, month, temperature, Location) |> 
@@ -426,6 +443,82 @@ fish_temps_buffered_long |>
 
 
 ```
+
+#### Waterbodies within the subwatersheds with positive results
+
+These are the named waterbodies within the subwatersheds where there have been positive fish results or suspected eDNA results.
+
+```{r}
+
+#get waterbodies within the subwatersheds with positive results
+
+ws_rivers <- bcdata::bcdc_query_geodata('freshwater-atlas-rivers') |>
+  filter(`WATERSHED_GROUP_CODE` %in% subw_pos$WATERSHED_GROUP_CODE) |> 
+  collect()
+
+ws_lakes<-bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |>
+  filter(`WATERSHED_GROUP_CODE` %in% subw_pos$WATERSHED_GROUP_CODE) |> 
+  collect()
+
+bbox<- st_bbox(ws_rivers)
+
+ws_rivers <- ws_rivers |>  mutate(Type = "River") |> 
+  filter(!is.na(GNIS_NAME_1))
+ws_lakes <- ws_lakes |>  mutate(Type = "Lake") |> 
+  filter(!is.na(GNIS_NAME_1))
+
+ws_waterbodies<-rbind(ws_rivers, ws_lakes)
+
+ggplot() +
+  geom_sf(data = bc, color = "lightgrey") +
+  geom_sf(data = ws_rivers, aes(color = Type), size = 0.75, show.legend = TRUE) +
+  geom_sf(data = ws_lakes, aes(color = Type), fill = "purple", alpha = 0.5, show.legend = TRUE) +
+  scale_color_manual(
+    name = "Waterbody Type",
+    values = c("River" = "blue", "Lake" = "purple")
+  ) +
+  guides(
+    color = guide_legend(
+      override.aes = list(
+        fill = c("blue", "purple"),  # Fill the legend boxes with the same colors
+        size = 4                     # Optional: make the legend symbols more visible
+      )
+    ),
+    fill = "none"  # Hide the fill legend
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Waterbodies within Subwatersheds with Positive Results"
+  ) +
+  coord_sf(
+    xlim = c(bbox["xmin"] - 0.1, bbox["xmax"] + 0.1),
+    ylim = c(bbox["ymin"] - 0.1, bbox["ymax"] + 0.1)
+  )
+
+
+
+ws_waterbodies |>
+  sf::st_drop_geometry() |> 
+  select(WATERSHED_GROUP_CODE, AREA_HA, GNIS_NAME_1, Type) |> 
+  rename(
+    Watershed_Group_Code = WATERSHED_GROUP_CODE,
+    Area_Hectares = AREA_HA,
+    Waterbody_Name = GNIS_NAME_1,
+    Type = Type) |> 
+  DT::datatable(
+    options = list(pageLength = 10, autoWidth = TRUE),
+    rownames = FALSE,
+    filter = "top",
+    extensions = "Buttons",
+    escape = FALSE,
+    class = "display"
+  )
+
+
+```
+
+
+
 
 ```{r}
 # #### Species with high susceptibility to whirling disease
