@@ -517,5 +517,12 @@ Amy Sigvaldson's work is at: `\\sfp.idir.bcgov\s140\S40203\WFC AEB\General\2 Ste
 
 # Overlap of watershed groups and streams / rivers with fish periodicity information.
 
+fish_per = sf::read_sf(paste0(onedrive_wd,"fish_periodicity_by_stream.gpkg"))
+
+ggplot() + 
+  geom_sf(data = ws) + 
+  geom_sf(data = fish_per, col = 'red') +
+  ggthemes::theme_map() + 
+  labs(title = "River-specific fish periodicity information has patchy distribution")
 ```
 
