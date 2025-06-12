@@ -12,6 +12,9 @@ knitr::opts_chunk$set(echo = F, warning = F, message = F)
 library(tidyverse)
 library(readxl)
 library(BAMMtools)
+base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
 
 bin_to_natural_breaks = function(dat,variable){
@@ -65,6 +68,29 @@ ggplot() +
 			ii. Watercraft inspections going to and coming from specific WBs inside BC that had positive WD results - look at destination wbs, those are automatically high priority
 			iii. Bin angler use in the same way as i.
 			iv. Presence/absence of hatcheries (doesn't contribute to score)
+
+```{r hatchery raster}
+hatchery_rast<-terra::rast(paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"))
+#plot
+
+
+hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
+
+hatchery_sf <- sf::st_as_sf(hatchery_points)
+
+
+ggplot() +
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = hatchery_sf, aes(color = sum), size = 1) +
+  scale_color_viridis_c(option = "magma") +
+  ggthemes::theme_map() +
+  labs(color = 'Hatchery Presence/Absence',
+       subtitle = "Hatcheries are present in the areas with a value of 1")
+
+```
+
+			
+			
 			v. True/False for "is target WB in subwatershed with positive fish" (doesn't contribute to score)
 			vi. Overlay eDNA results for tubifex
 			vii. If tubifex density is accurate, overlay tubifex density map binned into presence/absence (doesn't contribute to score)
