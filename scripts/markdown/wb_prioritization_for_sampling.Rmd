@@ -112,13 +112,17 @@ hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
 hatchery_sf <- sf::st_as_sf(hatchery_points)
 
 
+# Filter to only presence points (value = 1)
+hatchery_presence_sf <- hatchery_sf[hatchery_sf$sum == 1, ]
+
+# Plot with a single color and simplified legend
 ggplot() +
   geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = hatchery_sf, aes(color = sum), size = 1) +
-  scale_color_viridis_c(option = "magma") +
+  geom_sf(data = hatchery_presence_sf, color = "darkred", size = 1) +
   ggthemes::theme_map() +
-  labs(color = 'Hatchery Presence/Absence',
-       subtitle = "Hatcheries are present in the areas with a value of 1")
+  labs(color = NULL, subtitle = "Hatchery Presence in BC") +
+  theme(legend.position = "none")
+
 
 ```
 
