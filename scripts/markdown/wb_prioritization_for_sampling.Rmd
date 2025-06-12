@@ -28,7 +28,7 @@ bin_to_natural_breaks = function(dat,variable){
 }
 ```
 
-i. Bin watercraft inspections of watercraft coming from infected areas with natural breaks into low/med/high that are tied to waterbodies
+### Watercraft Inspections Coming from Infected States/Provinces
 
 ```{r watercraft_insp_from_inf_areas}
 insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
@@ -61,8 +61,39 @@ ggplot() +
                          ")"))
 ```
 
+### Watercraft Inspections Coming from Infected Waterbodies in BC
 
-			ii. Watercraft inspections going to and coming from specific WBs inside BC that had positive WD results - look at destination wbs, those are automatically high priority
+```{r watercraft_insp_from_inf_wbs_in_bc}
+insp_from_wd_bc_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_BC_WD_Infected_Waterbodies.gpkg")
+# Note: the above file can kind of only be modified / updated on Chris' computer, as it depends on the ZQMussels R project (specifically, it's Options.csv file) and the {imdp} R package... but the output gets saved to Chris' W drive, so that should be accessible for everyone!
+
+insp_from_wd_bc_wb_b = bin_to_natural_breaks(insp_from_wd_bc_wb, 'TotalInspections')
+
+# Strip out pacific ocean and 'dry storage' destinations for watercraft.
+insp_from_wd_bc_wb_b = insp_from_wd_bc_wb_b |> 
+  dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
+
+bins_title_bc = BAMMtools::getJenksBreaks(var = insp_from_wd_bc_wb_b$TotalInspections, k = 4)
+
+# Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
+ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_bin,
+                                             col = TotalInspections_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)',
+       subtitle = paste0("Inspection Bins: 1 ('low', ",
+                         bins_title_bc[1]," to ",bins_title_bc[2],
+                         "), 2 ('medium', ",
+                         bins_title_bc[2]," to ",bins_title_bc[3],
+                         "), 3 ('high', ",
+                         bins_title_bc[3]," to ",bins_title_bc[4],
+                         ")"))
+```
+
 			iii. Bin angler use in the same way as i.
 			iv. Presence/absence of hatcheries (doesn't contribute to score)
 			v. True/False for "is target WB in subwatershed with positive fish" (doesn't contribute to score)
