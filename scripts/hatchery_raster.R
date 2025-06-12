@@ -39,8 +39,14 @@ road_distances<-terra::rast(paste0(onedrive_wd,"CNF/distance_to_numbered_highway
 all_aquaculture_spv <- vect(all_aquaculture_sf)
 # Rasterize the points
 aquaculture_raster <- terra::rasterize(all_aquaculture_spv, road_distances, fun = "count", background = 0)
-# Save the raster
+#convert raster to presence absence
+presence_absence_raster <- classify(aquaculture_raster_bc, rcl = matrix(c(0, Inf, 1), ncol = 3, byrow = TRUE))
+presence_absence_raster[aquaculture_raster_bc == 0] <- 0
+# Save the rasters
 terra::writeRaster(aquaculture_raster, paste0(onedrive_wd,"raster/aquaculture_raster.tif"), overwrite = TRUE)
+terra::writeRaster(presence_absence_raster, paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"), overwrite = TRUE)
+#save the sf objects that were used to make the raster
+st_write(all_aquaculture_sf, paste0(onedrive_wd,"raster/aquaculture_facilities.shp"), delete_dsn = TRUE)
 # Plot the raster
 plot(aquaculture_raster, main = "Aquaculture Facilities in BC")
 
