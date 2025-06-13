@@ -12,11 +12,13 @@ knitr::opts_chunk$set(echo = F, warning = F, message = F)
 library(tidyverse)
 library(readxl)
 library(BAMMtools)
+library(terra)
+
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
-
+# This function finds the natural breaks (or, "Jenks") for a numeric column
 bin_to_natural_breaks = function(dat,variable){
   # find natural breaks ("jenks")
   nbreaks = BAMMtools::getJenksBreaks(var = dat[[variable]], k = 4)
@@ -29,6 +31,19 @@ bin_to_natural_breaks = function(dat,variable){
     dplyr::rename(!!rlang::sym(paste0(variable,"_bin")) := var_bin,
                   !!rlang::sym(variable) := var_to_bin)
 }
+
+## GGplot label convenience function
+bin_info_labs = function(bins_title){
+    labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)',
+       subtitle = paste0("Inspection Bins: 1 ('low', ",
+                         bins_title[1]," to ",bins_title[2],
+                         "), 2 ('medium', ",
+                         bins_title[2]," to ",bins_title[3],
+                         "), 3 ('high', ",
+                         bins_title[3]," to ",bins_title[4],
+                         ")"))
+}
 ```
 
 ### Watercraft Inspections Coming from Infected States/Provinces
@@ -36,6 +51,9 @@ bin_to_natural_breaks = function(dat,variable){
 ```{r watercraft_insp_from_inf_areas}
 insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
 # Note: the above file can kind of only be modified / updated on Chris' computer, as it depends on the ZQMussels R project (specifically, it's Options.csv file) and the {imdp} R package... but the output gets saved to Chris' W drive, so that should be accessible for everyone!
+
+# Tentative # 
+# We could maybe use this version / cut of waterbodies in BC, add to it at each step, and that could be our list of waterbodies? #
 
 insp_from_wd_inf_to_wb_b = bin_to_natural_breaks(insp_from_wd_inf_to_wb, 'TotalInspections')
 
@@ -62,7 +80,12 @@ ggplot() +
                          "), 3 ('high', ",
                          bins_title[3]," to ",bins_title[4],
                          ")"))
+
+wb_list = insp_from_wd_inf_to_wb_b |> 
+  dplyr::select(GNIS_NA, WATERSH, TotalInspections, TotalInspections_bin)
 ```
+
+Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
 ### Watercraft Inspections Coming from Infected Waterbodies in BC
 
@@ -95,17 +118,108 @@ ggplot() +
                          "), 3 ('high', ",
                          bins_title_bc[3]," to ",bins_title_bc[4],
                          ")"))
+
+# Identify any water bodies that aren't already in the list.
+new_wb_for_list = insp_from_wd_bc_wb_b |> 
+  dplyr::anti_join(
+    wb_list |> 
+      sf::st_drop_geometry() |> 
+      dplyr::select(GNIS_NA, WATERSH)
+  ) |> 
+  dplyr::select(GNIS_NA, WATERSH,
+                insp_from_wd_bc_wb = TotalInspections,
+                insp_from_wd_bc_wb_b = TotalInspections_bin)
+
+wb_already_in_list = insp_from_wd_bc_wb_b |> 
+  dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
+  dplyr::select(GNIS_NA, WATERSH, insp_from_wd_bc_wb = TotalInspections,
+                insp_from_wd_bc_wb_b = TotalInspections_bin) |> 
+  sf::st_drop_geometry()
+
+# Not new waterbodies per list, per se, but new columns.
+wb_list = wb_list |> 
+  dplyr::left_join(
+    wb_already_in_list
+  )
+
+# Are there any new waterbodies to be added to the wb_list?
+if(nrow(new_wb_for_list) > 0){
+  wb_list = wb_list |> 
+    dplyr::bind_rows(
+      new_wb_for_list
+    )
+}
 ```
 
-			iii. Bin angler use in the same way as i.
-			iv. Presence/absence of hatcheries (doesn't contribute to score)
+Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
-### Hatchery Locations 
+### Freshwater Fisheries Society Angler Survey (2022-2023)
+```{r}
+# We do have angler use as a raster on onedrive, but we also have the original polygon object on the W: drive.
+# ang = terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
+ang = sf::read_sf("W:/CMadsen/shared_data_sets/freshwater_fisheries_society_angler_survey_2022_2023.gpkg")
+
+# Drop waterbodies with no fishing
+ang = ang |> 
+  dplyr::filter(!is.na(days_fished))
+
+# Rename some columns.
+ang = ang |> 
+  dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
+                GNIS_NA = Waterbody)
+
+# Summarise at the waterbody name and watershed number level.
+ang_s = ang |> 
+  dplyr::group_by(GNIS_NA, WATERSH) |> 
+  dplyr::summarise(days_fished = sum(days_fished,na.rm=T)) |> 
+  dplyr::ungroup()
+
+ang_s = bin_to_natural_breaks(ang_s, "days_fished")
+
+bins_title_ang = BAMMtools::getJenksBreaks(ang_s$days_fished, k = 4)
+
+ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = ang_s, aes(col = days_fished_bin, fill = days_fished_bin)) + 
+  ggthemes::theme_map() + 
+  bin_info_labs(bins_title_ang)
+
+# Identify any water bodies that aren't already in the list.
+new_wb_for_list = ang_s |> 
+  dplyr::anti_join(
+    wb_list |> 
+      sf::st_drop_geometry() |> 
+      dplyr::select(GNIS_NA, WATERSH)
+  ) |> 
+  dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_bin)
+
+wb_already_in_list = ang_s |> 
+  dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
+  dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_bin) |> 
+  sf::st_drop_geometry()
+
+# Not new waterbodies per list, per se, but new columns.
+wb_list = wb_list |> 
+  dplyr::left_join(
+    wb_already_in_list
+  )
+
+# Are there any new waterbodies to be added to the wb_list?
+if(nrow(new_wb_for_list) > 0){
+  wb_list = wb_list |> 
+    dplyr::bind_rows(
+      new_wb_for_list
+    )
+}
+```
+
+Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
+
+### Hatchery Locations
 
 ```{r hatchery raster}
 hatchery_rast<-terra::rast(paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"))
 #plot
-
 
 hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
 
@@ -122,8 +236,6 @@ ggplot() +
   ggthemes::theme_map() +
   labs(color = NULL, subtitle = "Hatchery Presence in BC") +
   theme(legend.position = "none")
-
-
 ```
 
 			
