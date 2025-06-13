@@ -13,6 +13,9 @@ library(tidyverse)
 library(readxl)
 library(BAMMtools)
 library(terra)
+# devtools::install_github("yutannihilation/ggsflabel")
+library(ggsflabel)
+
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
@@ -225,9 +228,9 @@ hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
 
 hatchery_sf <- sf::st_as_sf(hatchery_points)
 
-
 # Filter to only presence points (value = 1)
-hatchery_presence_sf <- hatchery_sf[hatchery_sf$sum == 1, ]
+hatchery_presence_sf <- hatchery_sf[hatchery_sf$sum == 1, ] |> 
+  dplyr::rename(hatchery_present = sum)
 
 # Plot with a single color and simplified legend
 ggplot() +
@@ -236,13 +239,84 @@ ggplot() +
   ggthemes::theme_map() +
   labs(color = NULL, subtitle = "Hatchery Presence in BC") +
   theme(legend.position = "none")
+
+# Add in overlap of hatcheries to wb_list
+hatcheries_by_wb = hatchery_presence_sf |> 
+      sf::st_transform(3005) |> 
+  sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
+  sf::st_drop_geometry() |> 
+  dplyr::filter(!is.na(GNIS_NA)) |> 
+  dplyr::group_by(GNIS_NA, WATERSH) |> 
+  dplyr::reframe(hatchery_present = sum(hatchery_present))
+
+wb_list = wb_list |> 
+  dplyr::left_join(
+    hatcheries_by_wb
+  )
 ```
 
-			
-			
-			v. True/False for "is target WB in subwatershed with positive fish" (doesn't contribute to score)
+### Watershed Groups with Positive Fish eDNA Detection
+```{r}
+ws = sf::read_sf("W:/CMadsen/shared_data_sets/subwatersheds_BC.shp")
+
+pos_fish_edna = readxl::read_excel("J:/2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx") |> 
+  purrr::set_names(snakecase::to_snake_case)
+
+pos_fish_edna = pos_fish_edna |> 
+  dplyr::filter(stringr::str_detect(fish_sampling_results_q_pcr_mc_detected, 'Positive'))
+
+pos_fish_edna_sf = sf::st_as_sf(pos_fish_edna,coords = c('long','lat'), crs = 4326)
+
+# Also pull in emerald lake, find its centroid.
+emerald_lake = bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |> 
+  bcdata::filter(GNIS_NAME_1 == 'Emerald Lake', WATERBODY_POLY_ID == 705013945) |> 
+  collect()
+
+emerald_lake_centroid = emerald_lake |> 
+  sf::st_centroid()
+
+ws_w_edna_fish = ws |> 
+  sf::st_filter(
+    pos_fish_edna_sf |> 
+      sf::st_transform(3005) |> 
+      dplyr::bind_rows(emerald_lake_centroid)
+  )
+
+ws_bbox = sf::st_bbox(ws_w_edna_fish |> sf::st_buffer(dist = 50000))
+
+ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) + 
+  geom_sf(data = ws_w_edna_fish, aes(fill = "Positive Fish \neDNA Results")) +
+  geom_sf(data = pos_fish_edna_sf, col = 'lightgreen') + 
+  geom_sf(data = emerald_lake, fill = 'lightgreen', col = 'lightgreen') + 
+  geom_sf_label(data = emerald_lake, aes(label = 'Emerald Lake'), nudge_x = 80000) +
+  # geom_sf_label(data = pos_fish_edna_sf, aes(label = sample_site_name), nudge_x = 80000, nudge_y = -100000) +
+  ggsflabel::geom_sf_label_repel(data = pos_fish_edna_sf,
+                                 aes(label = sample_site_name),
+                        force = 10, seed = 10) +
+  labs(fill = 'eDNA') + 
+  coord_sf(xlim = ws_bbox[c(1,3)],
+           ylim = ws_bbox[c(2,4)]) + 
+  ggthemes::theme_map() + 
+  ggspatial::annotation_scale()
+
+wb_list = wb_list |> 
+  dplyr::mutate(fish_edna_positive_in_watershed = WATERSH %in% ws_w_edna_fish$WATERSHED_)
+```
+
 			vi. Overlay eDNA results for tubifex
 			vii. If tubifex density is accurate, overlay tubifex density map binned into presence/absence (doesn't contribute to score)
 			viii. Overlay susceptible species occurrences (present/absent for each waterbody) and facet map by species at this stage; maybe later we'll remove WBs with 0. We could apply this and show the effect of doing this.
 			ix. Add in expert opinion from regions, First Nations, etc., as available
 			x. In future, we'll bring in SARA-listed species / COSEWIC
+
+```{r add_together_variables}
+wb_list = wb_list |> 
+  dplyr::mutate(priority = TotalInspections_bin + insp_from_wd_bc_wb_b + days_fished_bin)
+```
+
+```{r show_results_data_table}
+wb_list |> 
+  sf::st_drop_geometry() |> 
+  DT::datatable()
+```
