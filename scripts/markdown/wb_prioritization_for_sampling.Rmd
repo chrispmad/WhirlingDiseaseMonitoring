@@ -57,6 +57,8 @@ bin_info_labs = function(bins_title){
 
 ### Watercraft Inspections Coming from Infected States/Provinces
 
+These are binned watercraft inspections originating from infected states or provinces, as well as from waterbodies in British Columbia (BC) that are infected with whirling disease. The bins represent the number of watercraft headed to BC waterbodies from infected states, provinces, or infected BC waterbodies.
+
 ```{r watercraft_insp_from_inf_areas}
 insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
 # Note: the above file can kind of only be modified / updated on Chris' computer, as it depends on the ZQMussels R project (specifically, it's Options.csv file) and the {imdp} R package... but the output gets saved to Chris' W drive, so that should be accessible for everyone!
@@ -97,6 +99,8 @@ wb_list = insp_from_wd_inf_to_wb_b |>
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
 ### Watercraft Inspections Coming from Infected Waterbodies in BC
+
+These are where boats are going when coming from infected BC waterbodies.
 
 ```{r watercraft_insp_from_inf_wbs_in_bc}
 insp_from_wd_bc_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_BC_WD_Infected_Waterbodies.gpkg")
@@ -503,5 +507,6 @@ wb_list = wb_list |>
 ```{r show_results_data_table}
 wb_list |> 
   sf::st_drop_geometry() |> 
-  DT::datatable()
+  DT::datatable(filter = 'top', options = list(
+  pageLength = 5, autoWidth = TRUE))
 ```
