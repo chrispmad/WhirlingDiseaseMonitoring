@@ -420,12 +420,13 @@ wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suita
 
 			
 ### Overlay Susceptible Species Occurrences
+
 viii. Overlay susceptible species occurrences (present/absent for each waterbody) and facet map by species at this stage; maybe later we'll remove WBs with 0. We could apply this
 			and show the effect of doing this.
 
 The species considered susceptible to whirling disease are:
 			
-```{r ocerlay_susceptible_species}
+```{r overlay_susceptible_species}
 
 # Fish occurrence records queried from typical data sources.
 all_occs = sf::read_sf(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/5_Incidental Observations/AIS_occurrences_all_sources.gpkg"))
