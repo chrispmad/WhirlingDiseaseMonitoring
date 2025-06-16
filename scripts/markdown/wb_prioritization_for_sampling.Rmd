@@ -168,6 +168,8 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 
 ### Freshwater Fisheries Society Angler Survey (2022-2023)
 
+
+
 ```{r}
 # We do have angler use as a raster on onedrive, but we also have the original polygon object on the W: drive.
 # ang = terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
@@ -230,6 +232,8 @@ if(nrow(new_wb_for_list) > 0){
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
 ### Hatchery Locations
+
+Locations of salmond hatcheries across the province.
 
 ```{r hatchery raster}
 hatchery_rast<-terra::rast(paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"))
