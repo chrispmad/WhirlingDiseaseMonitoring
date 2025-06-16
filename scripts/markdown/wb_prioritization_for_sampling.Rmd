@@ -383,25 +383,22 @@ ggplot() +
 bc_crs <- "EPSG:3005"
 tubifex_maxent <- project(tubifex_maxent, bc_crs, method = "near")
 wb_vect <- vect(wb_list)
+factor_levels <- levels(tubifex_maxent)[[1]]  # Only one layer
 extracted <- extract(tubifex_maxent, wb_vect)
+extracted <- dplyr::left_join(extracted, factor_levels, by = "fc.LQ_rm.3")
+
+
 
 
 suitability_summary <- extracted |> 
-  group_by(ID) |> 
-  # if there is a single cell with a 1, then the whole waterbody would be suitable
-  summarize(max_val = max(as.numeric(fc.LQ_rm.3), na.rm = TRUE)) |> 
-  mutate(tubifex_habitat_suitability = ifelse(max_val >= 0.5, "suitable", "unsuitable"))
-
-
-suitability_summary <- extracted |> 
-  group_by(ID) |> 
+  group_by(ID.x) |> 
   summarize(
     max_val = if (all(is.na(fc.LQ_rm.3))) NA_real_ else max(as.numeric(fc.LQ_rm.3), na.rm = TRUE)
   ) |> 
   mutate(
     tubifex_habitat_suitability = case_when(
       is.na(max_val) ~ NA_character_,
-      max_val >= 0.5 ~ "suitable",
+      max_val >= 1 ~ "suitable",
       TRUE ~ "unsuitable"
     )
   )
