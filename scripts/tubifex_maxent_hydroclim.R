@@ -122,8 +122,8 @@ fras<-read_sf(paste0(onedrive_wd, "/CNF/fraser_watershed_priority_area.gpkg")) |
 
 columfras<-bind_rows(colum, fras)
 terra::plot(top_model)
-terra::writeRaster(top_model, paste0("data/tubifex_maxent.tif"), overwrite = T)
-rast<-terra::rast(paste0("data/tubifex_maxent.tif"))
+terra::writeRaster(top_model, paste0("data/tubifex_hydroclim_maxent.tif"), overwrite = T)
+rast<-terra::rast(paste0("data/tubifex_hydroclim_maxent.tif"))
 
 
 
