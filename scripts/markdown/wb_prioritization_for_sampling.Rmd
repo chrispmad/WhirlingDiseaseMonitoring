@@ -172,8 +172,6 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 
 ### Freshwater Fisheries Society Angler Survey (2022-2023)
 
-
-
 ```{r}
 # We do have angler use as a raster on onedrive, but we also have the original polygon object on the W: drive.
 # ang = terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
@@ -235,43 +233,46 @@ if(nrow(new_wb_for_list) > 0){
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
-### Hatchery Locations
+```{r commented_hatcheries}
 
-Locations of salmond hatcheries across the province.
-
-```{r hatchery raster}
-hatchery_rast<-terra::rast(paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"))
-#plot
-
-hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
-
-hatchery_sf <- sf::st_as_sf(hatchery_points)
-
-# Filter to only presence points (value = 1)
-hatchery_presence_sf <- hatchery_sf[hatchery_sf$sum == 1, ] |> 
-  dplyr::rename(hatchery_present = sum)
-
-# Plot with a single color and simplified legend
-ggplot() +
-  geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = hatchery_presence_sf, color = "darkred", size = 1) +
-  ggthemes::theme_map() +
-  labs(color = NULL, subtitle = "Hatchery Presence in BC") +
-  theme(legend.position = "none")
-
-# Add in overlap of hatcheries to wb_list
-hatcheries_by_wb = hatchery_presence_sf |> 
-      sf::st_transform(3005) |> 
-  sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
-  sf::st_drop_geometry() |> 
-  dplyr::filter(!is.na(GNIS_NA)) |> 
-  dplyr::group_by(GNIS_NA, WATERSH) |> 
-  dplyr::reframe(hatchery_present = sum(hatchery_present))
-
-wb_list = wb_list |> 
-  dplyr::left_join(
-    hatcheries_by_wb
-  )
+# ### Hatchery Locations
+# 
+# Locations of salmond hatcheries across the province.
+# 
+# ```{r hatchery raster}
+# hatchery_rast<-terra::rast(paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"))
+# #plot
+# 
+# hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
+# 
+# hatchery_sf <- sf::st_as_sf(hatchery_points)
+# 
+# # Filter to only presence points (value = 1)
+# hatchery_presence_sf <- hatchery_sf[hatchery_sf$sum == 1, ] |> 
+#   dplyr::rename(hatchery_present = sum)
+# 
+# # Plot with a single color and simplified legend
+# ggplot() +
+#   geom_sf(data = bcmaps::bc_bound()) +
+#   geom_sf(data = hatchery_presence_sf, color = "darkred", size = 1) +
+#   ggthemes::theme_map() +
+#   labs(color = NULL, subtitle = "Hatchery Presence in BC") +
+#   theme(legend.position = "none")
+# 
+# # Add in overlap of hatcheries to wb_list
+# hatcheries_by_wb = hatchery_presence_sf |> 
+#       sf::st_transform(3005) |> 
+#   sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
+#   sf::st_drop_geometry() |> 
+#   dplyr::filter(!is.na(GNIS_NA)) |> 
+#   dplyr::group_by(GNIS_NA, WATERSH) |> 
+#   dplyr::reframe(hatchery_present = sum(hatchery_present))
+# 
+# wb_list = wb_list |> 
+#   dplyr::left_join(
+#     hatcheries_by_wb
+#   )
+# ```
 ```
 
 ### Watershed Groups with Fish Samples with WD
@@ -634,22 +635,31 @@ ggplot() +
 fish_occs<-sf::st_transform(fish_occs, 3005)
 
 # Initialize columns for each species in wb_list
-species_names <-gsub(" ", "_", species_names)  # Ensure species name matches the column name
-for (sp in species_names) {
-  wb_list[[sp]] <- FALSE
-}
+#species_names <-gsub(" ", "_", species_names)  # Ensure species name matches the column name
+
+wb_list$Fish_present <- ""
+
 
 for (sp in species_names) {
   # Filter points for the species
-  sp <-gsub(" ", "_", sp)  # Ensure species name matches the column name
-  sp_points <- fish_occs[fish_occs$species == sp, ]
+  spoi<-gsub(" ", "_", sp)
+  sp_points <- fish_occs[fish_occs$species == spoi, ]
   
   # Check which waterbodies intersect with any points of this species
   intersects <- st_intersects(wb_list, sp_points, sparse = FALSE)
   
-  # Update the column with TRUE where there's at least one intersecting point
-  wb_list[[sp]] <- apply(intersects, 1, any)
+  # Append species name to Fish_present where there's at least one intersecting point
+  for (i in seq_len(nrow(wb_list))) {
+    if (any(intersects[i, ])) {
+      if (wb_list$Fish_present[i] == "") {
+        wb_list$Fish_present[i] <- sp
+      } else {
+        wb_list$Fish_present[i] <- paste(gsub("_", " ",wb_list$Fish_present[i]), sp, sep = ", ")
+      }
+    }
+  }
 }
+
 
 ```
 			
