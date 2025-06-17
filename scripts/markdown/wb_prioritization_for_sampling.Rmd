@@ -507,7 +507,7 @@ for (sp in species_names) {
 
 ```{r add_together_variables}
 wb_list = wb_list |> 
-  dplyr::mutate(priority = TotalInspections_bin + insp_from_wd_bc_wb_b + days_fished_bin)
+  dplyr::mutate(priority = as.numeric(TotalInspections_bin, na.rm = T) + as.numeric(insp_from_wd_bc_wb_b, na.rm = T) + as.numeric(days_fished_bin, na.rm = T))
 ```
 
 
