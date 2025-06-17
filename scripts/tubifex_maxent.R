@@ -10,14 +10,15 @@ library(leafpop)
 library(readxl)
 library(sf)
 library(ENMeval)
+library(rJava)
 
+rJava::.jinit()
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 proj_wd = getwd()
-
 
 new_potential_dat_file = read_excel(paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"), sheet = "Fish and eDNA")
 
@@ -47,9 +48,9 @@ dat = dat |>
   dplyr::mutate(fish_sampling_results_q_pcr_mc_detected = ifelse(str_detect(fish_sampling_results_q_pcr_mc_detected,"Positive"),"Positive",fish_sampling_results_q_pcr_mc_detected)) |>
   dplyr::mutate(comments = ifelse(comments == '', NA, comments))
 
-dat_max<-dat |> 
-  select(e_dna_results_tubifex, geometry) |> 
-  dplyr::filter(e_dna_results_tubifex == "Detected") |> 
+dat_max<-dat |>
+  select(e_dna_results_tubifex, geometry) |>
+  dplyr::filter(e_dna_results_tubifex == "Detected") |>
   distinct()
 
 carbon<-terra::rast(paste0(onedrive_wd,"/raster/Carbon_Dissolved_Organic_All_masked_krig.tif"))
@@ -63,29 +64,29 @@ rast_brick<-c(carbon, conductivitity, nitrates, oxygen, turbidity, slope)
 names(rast_brick) <- c("carbon", "conductivity", "nitrates", "oxygen", "turbidity", "slope")
 bc<-bcmaps::bc_bound()
 extentvect<- project(vect(bc),"EPSG:4326")
-watercourses = terra::rast(paste0(onedrive_wd,"fwa_streams/stream_order_three_plus_2km_res.tif")) 
+watercourses = terra::rast(paste0(onedrive_wd,"fwa_streams/stream_order_three_plus_2km_res.tif"))
 watercourses<-terra::crop(watercourses, extentvect)
 watercourses<-terra::mask(watercourses, extentvect)
 
-pseudoabsences <- predicts::backgroundSample(watercourses, p = terra::vect(dat), n = 10000, extf = 0.9) |> 
+pseudoabsences <- predicts::backgroundSample(watercourses, p = terra::vect(dat), n = 10000, extf = 0.9) |>
   as.data.frame()
 
-dat_max = dat_max |> 
+dat_max = dat_max |>
   dplyr::mutate(x = sf::st_coordinates(geometry)[,1],
                 y = sf::st_coordinates(geometry)[,2])
 
 for(raster_var in unique(names(rast_brick))){
-  dat_max[[raster_var]] <- terra::extract(rast_brick[[raster_var]], 
+  dat_max[[raster_var]] <- terra::extract(rast_brick[[raster_var]],
                                           dat_max[,c("x","y")], ID = FALSE)[[raster_var]]
 }
 
-pres_xy<- dat_max |> 
+pres_xy<- dat_max |>
   dplyr::mutate(x = sf::st_coordinates(geometry)[,1],
-                y = sf::st_coordinates(geometry)[,2]) |> 
-  dplyr::select(x,y) |> 
+                y = sf::st_coordinates(geometry)[,2]) |>
+  dplyr::select(x,y) |>
   sf::st_drop_geometry()
 
-pseudo<- pseudoabsences |> 
+pseudo<- pseudoabsences |>
   dplyr::select(x,y)
 
 me = ENMevaluate(occs = pres_xy,
@@ -96,9 +97,9 @@ me = ENMevaluate(occs = pres_xy,
                  tune.args = list(fc = c("L", "Q", "LQ"),
                                   rm = c(1:5)))
 
-top_model1 = me@results |> 
-  dplyr::mutate(auccbi = (cbi.train + auc.train) / 2) |> 
-  dplyr::arrange(dplyr::desc(auccbi)) |> 
+top_model1 = me@results |>
+  dplyr::mutate(auccbi = (cbi.train + auc.train) / 2) |>
+  dplyr::arrange(dplyr::desc(auccbi)) |>
   dplyr::slice(1)
 
 top_model = me@predictions[[top_model1$tune.args]]
@@ -107,9 +108,9 @@ maxent_html = me@models[[top_model1$tune.args]]@html
 
 
 ## add in the column fras - clip the raster down - just the perimiter?
-colum<-read_sf(paste0(onedrive_wd, "/CNF/columbia_watershed_priority_area.gpkg")) |> 
+colum<-read_sf(paste0(onedrive_wd, "/CNF/columbia_watershed_priority_area.gpkg")) |>
   sf::st_transform(4326)
-fras<-read_sf(paste0(onedrive_wd, "/CNF/fraser_watershed_priority_area.gpkg")) |> 
+fras<-read_sf(paste0(onedrive_wd, "/CNF/fraser_watershed_priority_area.gpkg")) |>
   sf::st_transform(4326)
 
 columfras<-bind_rows(colum, fras)
@@ -138,17 +139,17 @@ evalplot.stats(e = me, stats = "or.10p", color = "fc", x.var = "rm")
 browseURL(me@models[[top_model1$tune.args]]@html)
 
 
-top5 <- me@results |> 
-  filter(!is.na(AICc)) |> 
-  mutate(auc_cbi_mix = (as.numeric(auc.train) + as.numeric(cbi.train)) / 2) |> 
-  arrange(desc(auc_cbi_mix)) |> 
+top5 <- me@results |>
+  filter(!is.na(AICc)) |>
+  mutate(auc_cbi_mix = (as.numeric(auc.train) + as.numeric(cbi.train)) / 2) |>
+  arrange(desc(auc_cbi_mix)) |>
   slice_head(n = 5)
 
 #write.table(top5, paste0(output_fn, "top_5_models.txt"), row.names = F)
 topfc<-as.character(top5[1,]$fc)
 toprm<-as.character(top5[1,]$rm)
 
-opt.aicc<- eval.results(me) |> 
+opt.aicc<- eval.results(me) |>
   dplyr::filter(fc == topfc & rm == toprm)
 
 # Find which model had the lowest AIC; we'll use this for now.
@@ -163,25 +164,25 @@ predictions = terra::rast(eval.predictions(me)[[opt.aicc$tune.args]])
 # eval_plot<-eval_model
 # Pull out maxent's predictions for occurrence locations.
 
-# Check out results - this dataframe could be simplified to just hone in 
+# Check out results - this dataframe could be simplified to just hone in
 # on the particular metrics we are curious about!
-maxent_results = me@results |> 
-  dplyr::filter(tune.args == opt.aicc$tune.args) |> 
-  tidyr::as_tibble() |> 
-  dplyr::mutate(dplyr::across(dplyr::everything(), \(x) as.character(x))) |> 
+maxent_results = me@results |>
+  dplyr::filter(tune.args == opt.aicc$tune.args) |>
+  tidyr::as_tibble() |>
+  dplyr::mutate(dplyr::across(dplyr::everything(), \(x) as.character(x))) |>
   tidyr::pivot_longer(cols = dplyr::everything())
 
-maxent_results.partitions = me@results.partitions |> 
-  dplyr::filter(tune.args == opt.aicc$tune.args) |> 
+maxent_results.partitions = me@results.partitions |>
+  dplyr::filter(tune.args == opt.aicc$tune.args) |>
   tidyr::as_tibble()
 
 maxent_html = me@models[[opt.aicc$tune.args]]@html
 
-single_model_metrics = me@models[[opt.aicc$tune.args]]@results[,1] |> 
-  as.matrix() |> 
+single_model_metrics = me@models[[opt.aicc$tune.args]]@results[,1] |>
+  as.matrix() |>
   as.data.frame()
 
-single_model_metrics = single_model_metrics |> 
+single_model_metrics = single_model_metrics |>
   dplyr::mutate(metric = snakecase::to_snake_case(rownames(single_model_metrics))) |>
   dplyr::rename(value = V1) |>
   tidyr::as_tibble() |>
