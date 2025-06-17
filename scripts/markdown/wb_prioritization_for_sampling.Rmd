@@ -26,7 +26,7 @@ onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Governm
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 proj_wd = getwd()
 if(stringr::str_detect(proj_wd,"scripts")){
-  proj_wd = stringr::str_remove(proj_wd, "/scripts")
+  proj_wd = stringr::str_remove(proj_wd, "scripts/markdown")
 }
 
 # This function finds the natural breaks (or, "Jenks") for a numeric column
