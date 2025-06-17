@@ -274,8 +274,7 @@ wb_list = wb_list |>
   )
 ```
 
-### Watershed Groups with Positive Fish eDNA Detection
-
+### Watershed Groups with Fish Samples with WD
 
 ```{r}
 ws = sf::read_sf("W:/CMadsen/shared_data_sets/subwatersheds_BC.shp")
@@ -326,7 +325,166 @@ wb_list = wb_list |>
   dplyr::mutate(fish_edna_positive_in_watershed = WATERSH %in% ws_w_edna_fish$WATERSHED_)
 ```
 
+### Watersheds Downstream of Fish Samples with WD
+```{r}
+library(bcdata)
+if(!file.exists("data/named_watersheds_of_bc.rds")){
+  # small_watersheds = bcdc_query_geodata('freshwater-atlas-named-watersheds') |> 
+  small_watersheds = bcdc_query_geodata('wsa-third-order-and-greater-watersheds-50-000') |> 
+    collect()
+  saveRDS(small_watersheds, "data/named_watersheds_of_bc.rds")
+} else {
+  small_watersheds = readRDS("data/named_watersheds_of_bc.rds")
+  # test = small_watersheds |> 
+  #   # filter for 2nd order watersheds
+  #   dplyr::filter(str_detect(FWA_WATERSHED_CODE,"^[0-9]{3}-[^0]{6}"))
+}
 
+pos_fish_edna_sf_albers = pos_fish_edna_sf |> 
+  sf::st_transform(3005)
+
+small_watersheds_infected = small_watersheds |> 
+  sf::st_filter(pos_fish_edna_sf_albers)
+
+adj_small_watersheds = small_watersheds |> 
+  sf::st_filter(
+    small_watersheds_infected |> 
+      sf::st_buffer(dist = 50)
+  )
+
+watershed_codes_infected = unique(str_extract(small_watersheds_infected$WSD_ID,'^.{4}'))
+
+# watershed groups?
+wsg = bcdc_query_geodata('freshwater-atlas-watershed-groups') |> 
+  filter(WATERSHED_GROUP_CODE %in% watershed_codes_infected) |> 
+  collect()
+
+# Grab rivers in infected little watersheds. This is a first pass,
+# we may need to requery the BC data catalogue with the 
+# identifying codes (e.g. Blue line key, or fwa watershed code)
+# of the river chunks returned.
+infected_rivers = bcdc_query_geodata('freshwater-atlas-rivers') |> 
+  filter(INTERSECTS(small_watersheds_infected)) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
+  dplyr::summarise()
+
+# blks_of_infected_rivers = unique(infected_rivers$BLUE_LINE_KEY)
+# 
+# infected_rivers = bcdc_query_geodata('freshwater-atlas-rivers') |> 
+#   filter(BLUE_LINE_KEY %in% blks_of_infected_rivers) |> 
+#   filter(INTERSECTS(wsg)) |> 
+#   collect() |> 
+#   dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
+#   dplyr::summarise()
+
+# Use the FWA_WATERSHED_CODE to find rivers downstream of infected rivers
+infected_rivers_fwa = unique(infected_rivers$FWA_WATERSHED_CODE)
+infected_rivers_ds_fwa = str_replace(infected_rivers_fwa, "[0-9]{6}(?=-000000)","000000")
+
+infected_rivers_downstream = bcdc_query_geodata('freshwater-atlas-rivers') |> 
+  filter(FWA_WATERSHED_CODE %in% infected_rivers_ds_fwa) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
+  dplyr::summarise()
+
+# Join the mean elevations to adj_small_watersheds
+adj_small_watersheds$mean_elev = elev_per_ID$mean_elev
+
+# 1st) For each infected watershed, find the adjacent watersheds (e.g. 5)
+# 2nd) st_filter using river that is present in infected watershed (probs 1-2)
+# 3rd) filter adjacent watersheds such that they are lower in mean elevation
+#      than the infected watershed.
+infectable_adj_watersheds = small_watersheds_infected |> 
+  dplyr::group_by(GAZETTED_NAME) |> 
+  dplyr::group_split() |> 
+  purrr::map( ~ {
+
+    # Find the adjacent small watersheds of the current .x
+    small_ws_adj_to_x = adj_small_watersheds |> 
+      sf::st_filter(
+        .x |> 
+          sf::st_buffer(dist = 50)
+      )
+      
+    # Make sure there's a river that connects them.
+    rivers_in_x = infected_rivers |> 
+      dplyr::ungroup() |> 
+      sf::st_filter(.x)
+    
+    small_ws_adj_to_x = small_ws_adj_to_x |> 
+      sf::st_filter(rivers_in_x)
+    
+    # filter adjacent watersheds such that they are lower in mean elevation 
+    # than the infected watershed.
+    cutoff_elev = adj_small_watersheds |> 
+      dplyr::filter(GAZETTED_NAME == .x$GAZETTED_NAME) |> 
+      dplyr::pull(mean_elev)
+    
+    infectable_small_watersheds = small_ws_adj_to_x |> 
+      dplyr::filter(mean_elev <= cutoff_elev)
+    
+    infectable_small_watersheds
+  }) |> 
+  dplyr::bind_rows() |> 
+  dplyr::filter(!duplicated(GAZETTED_NAME))
+
+# Snag all rivers AND LAKES! in the adjacent watershed polygons
+rivers_in_infectable_adj_watersheds = bcdc_query_geodata('freshwater-atlas-rivers') |> 
+  filter(INTERSECTS(infectable_adj_watersheds)) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
+  dplyr::summarise()
+
+lakes_in_infectable_adj_watersheds = bcdc_query_geodata('freshwater-atlas-lakes') |> 
+  filter(INTERSECTS(infectable_adj_watersheds)) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
+  dplyr::summarise()
+
+# Query PSCIS for fish passage barriers.
+pscis_in_area = bcdc_query_geodata('pscis-assessments') |> 
+  filter(INTERSECTS(adj_small_watersheds)) |> 
+  collect()
+
+# Filter potential fish passage barriers to within 50m of rivers.
+pscis_near_rivers = pscis_in_area |> 
+  sf::st_filter(
+    sf::st_buffer(infected_rivers, dist = 50)
+  )
+
+# Clip rivers with PSCIS , buffered by like 100 meters?
+pscis_near_rivers_buff = sf::st_buffer(pscis_near_rivers, dist = 100)
+
+elev = elevatr::get_elev_raster(locations = sf::st_bbox(wsg), z = 8)
+
+# Find mean elevation for each small watershed.
+elev_per_ID = terra::extract(terra::rast(elev),terra::vect(adj_small_watersheds)) |> 
+  tidyr::tibble()
+
+names(elev_per_ID)[2] = "elev_in_meters"
+
+elev_per_ID = elev_per_ID |> 
+  dplyr::group_by(ID) |> 
+  dplyr::reframe(mean_elev = mean(elev_in_meters))
+
+ggplot() + 
+  tidyterra::geom_spatraster(data = terra::rast(elev), alpha = 0.5) +
+  geom_sf(data = adj_small_watersheds, aes(fill = mean_elev))
+
+ggplot() + 
+  geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
+  geom_sf(data = adj_small_watersheds, fill = 'cyan') + 
+  geom_sf(data = infectable_adj_watersheds, fill = 'orange') + 
+  geom_sf(data = small_watersheds_infected, fill = 'red') + 
+  geom_sf(data = rivers_in_infectable_adj_watersheds, fill = 'purple', col = 'purple') +
+  geom_sf(data = lakes_in_infectable_adj_watersheds, fill = 'purple', col = 'purple') +
+  geom_sf(data = infected_rivers, fill = 'darkblue', col = 'darkblue') + 
+  geom_sf(data = pscis_in_area, col = 'green', alpha = 0.1) +
+  geom_sf(data = pscis_near_rivers, col = 'green') +
+  geom_sf(data = pos_fish_edna_sf_albers) + 
+  labs(title = '')
+```
 
 ### Overlay of Positive Tubifex Results
 
@@ -361,9 +519,6 @@ wb_list = wb_list |>
 
 ```
 
-			
-			
-			
 ### Tubifex MaxEnt Model Results
 
 vii. If tubifex density is accurate, overlay tubifex density map binned into presence/absence (doesn't contribute to score)
@@ -420,9 +575,6 @@ wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suita
 
 ```
 
-			
-
-			
 ### Overlay Susceptible Species Occurrences
 
 viii. Overlay susceptible species occurrences (present/absent for each waterbody) and facet map by species at this stage; maybe later we'll remove WBs with 0. We could apply this
