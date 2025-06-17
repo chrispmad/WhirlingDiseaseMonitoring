@@ -24,10 +24,10 @@ requery_occs = F
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
-proj_wd = getwd()
-if(stringr::str_detect(proj_wd,"scripts")){
-  proj_wd = stringr::str_remove(proj_wd, "scripts/markdown")
-}
+# proj_wd = getwd()
+# if(stringr::str_detect(proj_wd,"scripts")){
+#   proj_wd = stringr::str_remove(proj_wd, "scripts/markdown")
+# }
 
 # This function finds the natural breaks (or, "Jenks") for a numeric column
 bin_to_natural_breaks = function(dat,variable){
@@ -372,7 +372,7 @@ Maxent produced habitat suitability maps, based on a set of pre-determined param
 
 ```{r tubifex_maxent}
 
-tubifex_maxent<- terra::rast(paste0(proj_wd,"output/habitat_maxent_tubifex_binary_fc.LQ_rm.3.tif"))
+tubifex_maxent<- terra::rast("output/habitat_maxent_tubifex_binary_fc.LQ_rm.3.tif")
 #create factors for the values in the raster
 tubifex_maxent <- terra::as.factor(tubifex_maxent)
 
