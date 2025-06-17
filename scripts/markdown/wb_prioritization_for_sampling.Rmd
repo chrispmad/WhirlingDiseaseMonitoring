@@ -482,7 +482,7 @@ ggplot() +
 fish_occs<-sf::st_transform(fish_occs, 3005)
 
 # Initialize columns for each species in wb_list
-species_names <-gsub(" ", "_", sp)  # Ensure species name matches the column name
+species_names <-gsub(" ", "_", species_names)  # Ensure species name matches the column name
 for (sp in species_names) {
   wb_list[[sp]] <- FALSE
 }
