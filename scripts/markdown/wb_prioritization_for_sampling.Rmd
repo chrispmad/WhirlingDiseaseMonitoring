@@ -20,6 +20,7 @@ library(sf)
 
 
 requery_occs = F
+k_breaks = 5 # number of breaks for k-means clustering
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
 onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
@@ -43,17 +44,82 @@ bin_to_natural_breaks = function(dat,variable){
                   !!rlang::sym(variable) := var_to_bin)
 }
 
+#k-means clustering function
+bin_to_kmeans <- function(dat, variable, centers = k_breaks) {
+  has_geometry <- inherits(dat, "sf")
+  # Store and drop geometry if present
+  if (has_geometry) {
+    geometry <- sf::st_geometry(dat)
+    dat_df <- sf::st_drop_geometry(dat)
+  } else {
+    dat_df <- dat
+  }
+
+  # Identify valid rows
+  valid_rows <- is.finite(dat_df[[variable]])
+  dat_df_valid <- dat_df[valid_rows, ]
+
+  # Run k-means clustering
+  set.seed(123)
+  km <- stats::kmeans(dat_df_valid[[variable]], centers = centers, iter.max = 100)
+
+  # Reorder cluster labels by mean value
+  cluster_means <- tapply(dat_df_valid[[variable]], km$cluster, mean)
+  ordered_clusters <- order(cluster_means)
+  relabeled_clusters <- match(km$cluster, ordered_clusters)
+
+  # Assign bins back to full dataset
+  dat_df$var_bin <- NA
+  dat_df$var_bin[valid_rows] <- relabeled_clusters
+
+  # Final formatting
+  dat_df <- dat_df |> 
+    dplyr::rename(var_to_bin = !!rlang::sym(variable)) |> 
+    dplyr::mutate(var_bin = as.character(var_bin)) |> 
+    dplyr::mutate(var_bin = factor(var_bin, levels = as.character(1:centers))) |> 
+    dplyr::rename(
+      !!rlang::sym(paste0(variable, "_kmeans_bin")) := var_bin,
+      !!rlang::sym(variable) := var_to_bin
+    )
+
+  # Reattach geometry if present
+# Reattach geometry if present
+  if (has_geometry) {
+    sf::st_geometry(dat_df) <- geometry
+    dat_df <- sf::st_as_sf(dat_df)
+  }
+  
+
+  return(dat_df)
+}
+
+
+getKMeansBreaks <- function(var, k = k_breaks) {
+  var_clean <- var[!is.na(var)]  # remove NAs
+  set.seed(123)  # for reproducibility
+  km <- stats::kmeans(var_clean, centers = k)
+  centers <- sort(km$centers)
+  # Compute midpoints between sorted centers
+  breaks <- c(min(var_clean),
+              zoo::rollmean(centers, 2),
+              max(var_clean))
+  return(breaks)
+}
+
+
 ## GGplot label convenience function
 bin_info_labs = function(bins_title){
     labs(color = 'Inspections (bin)',
        fill = 'Inspections (bin)',
-       subtitle = paste0("Inspection Bins: 1 ('low', ",
-                         bins_title[1]," to ",bins_title[2],
-                         "), 2 ('medium', ",
-                         bins_title[2]," to ",bins_title[3],
-                         "), 3 ('high', ",
-                         bins_title[3]," to ",bins_title[4],
-                         ")"))
+       subtitle = paste0(
+  "Inspection Bins: ",
+  "1 ('very low', ", round(bins_title[1]), " to ", round(bins_title[2]), "), ",
+  "2 ('low', ", round(bins_title[2]), " to ", round(bins_title[3]), "), ",
+  "3 ('medium', ", round(bins_title[3]), " to ", round(bins_title[4]), "), ",
+  "4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
+  "5 ('very high', ", round(bins_title[5]), " to ", round(bins_title[6]), ")"
+)
+)
 }
 ```
 
@@ -88,34 +154,36 @@ These are binned watercraft inspections originating from infected states or prov
 # Tentative # 
 # We could maybe use this version / cut of waterbodies in BC, add to it at each step, and that could be our list of waterbodies? #
 
-insp_from_wd_inf_to_wb_b = bin_to_natural_breaks(insp_from_wd_inf_to_wb, 'TotalInspections')
+insp_from_wd_inf_to_wb_b = bin_to_kmeans(insp_from_wd_inf_to_wb, 'TotalInspections', k_breaks)
 
 # Strip out pacific ocean and 'dry storage' destinations for watercraft.
 insp_from_wd_inf_to_wb_b = insp_from_wd_inf_to_wb_b |> 
   dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
 
-bins_title = BAMMtools::getJenksBreaks(var = insp_from_wd_inf_to_wb$TotalInspections, k = 4)
+bins_title = getKMeansBreaks(insp_from_wd_inf_to_wb_b$TotalInspections, k = k_breaks)
 
 # Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
 ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(fill = TotalInspections_bin,
-                                             col = TotalInspections_bin)) + 
+  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(fill = TotalInspections_kmeans_bin ,
+                                             col = TotalInspections_kmeans_bin )) + 
   ggthemes::theme_map() + 
   scale_fill_brewer(palette = 'Spectral', direction = -1) +
   scale_color_brewer(palette = 'Spectral', direction = -1) + 
   labs(color = 'Inspections (bin)',
        fill = 'Inspections (bin)',
-       subtitle = paste0("Inspection Bins: 1 ('low', ",
-                         bins_title[1]," to ",bins_title[2],
-                         "), 2 ('medium', ",
-                         bins_title[2]," to ",bins_title[3],
-                         "), 3 ('high', ",
-                         bins_title[3]," to ",bins_title[4],
-                         ")"))
+       subtitle = paste0(
+  "Inspection Bins: ",
+  "1 ('very low', ", round(bins_title[1]), " to ", round(bins_title[2]), "), ",
+  "2 ('low', ", round(bins_title[2]), " to ", round(bins_title[3]), "), ",
+  "3 ('medium', ", round(bins_title[3]), " to ", round(bins_title[4]), "), ",
+  "4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
+  "5 ('very high', ", round(bins_title[5]), " to ", round(bins_title[6]), ")"
+)
+)
 
 wb_list = insp_from_wd_inf_to_wb_b |> 
-  dplyr::select(GNIS_NA, WATERSH, TotalInspections, TotalInspections_bin)
+  dplyr::select(GNIS_NA, WATERSH, TotalInspections, TotalInspections_kmeans_bin )
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
@@ -128,31 +196,34 @@ These are where boats are going when coming from infected BC waterbodies.
 
 # Note: the above file can kind of only be modified / updated on Chris' computer, as it depends on the ZQMussels R project (specifically, it's Options.csv file) and the {imdp} R package... but the output gets saved to Chris' W drive, so that should be accessible for everyone!
 
-insp_from_wd_bc_wb_b = bin_to_natural_breaks(insp_from_wd_bc_wb, 'TotalInspections')
+insp_from_wd_bc_wb_b = bin_to_kmeans(insp_from_wd_bc_wb, 'TotalInspections', k_breaks)
 
 # Strip out pacific ocean and 'dry storage' destinations for watercraft.
 insp_from_wd_bc_wb_b = insp_from_wd_bc_wb_b |> 
   dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
 
-bins_title_bc = BAMMtools::getJenksBreaks(var = insp_from_wd_bc_wb_b$TotalInspections, k = 4)
+bins_title_bc = getKMeansBreaks(insp_from_wd_bc_wb_b$TotalInspections, k = k_breaks)
+
 
 # Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
 ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_bin,
-                                             col = TotalInspections_bin)) + 
+  geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_kmeans_bin ,
+                                             col = TotalInspections_kmeans_bin )) + 
   ggthemes::theme_map() + 
   scale_fill_brewer(palette = 'Spectral', direction = -1) +
   scale_color_brewer(palette = 'Spectral', direction = -1) + 
   labs(color = 'Inspections (bin)',
        fill = 'Inspections (bin)',
-       subtitle = paste0("Inspection Bins: 1 ('low', ",
-                         bins_title_bc[1]," to ",bins_title_bc[2],
-                         "), 2 ('medium', ",
-                         bins_title_bc[2]," to ",bins_title_bc[3],
-                         "), 3 ('high', ",
-                         bins_title_bc[3]," to ",bins_title_bc[4],
-                         ")"))
+       subtitle = paste0(
+  "Inspection Bins: ",
+  "1 ('very low', ", round(bins_title[1]), " to ", round(bins_title[2]), "), ",
+  "2 ('low', ", round(bins_title[2]), " to ", round(bins_title[3]), "), ",
+  "3 ('medium', ", round(bins_title[3]), " to ", round(bins_title[4]), "), ",
+  "4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
+  "5 ('very high', ", round(bins_title[5]), " to ", round(bins_title[6]), ")"
+)
+)
 
 # Identify any water bodies that aren't already in the list.
 new_wb_for_list = insp_from_wd_bc_wb_b |> 
@@ -163,12 +234,12 @@ new_wb_for_list = insp_from_wd_bc_wb_b |>
   ) |> 
   dplyr::select(GNIS_NA, WATERSH,
                 insp_from_wd_bc_wb = TotalInspections,
-                insp_from_wd_bc_wb_b = TotalInspections_bin)
+                insp_from_wd_bc_wb_b = TotalInspections_kmeans_bin )
 
 wb_already_in_list = insp_from_wd_bc_wb_b |> 
   dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
   dplyr::select(GNIS_NA, WATERSH, insp_from_wd_bc_wb = TotalInspections,
-                insp_from_wd_bc_wb_b = TotalInspections_bin) |> 
+                insp_from_wd_bc_wb_b = TotalInspections_kmeans_bin ) |> 
   sf::st_drop_geometry()
 
 # Not new waterbodies per list, per se, but new columns.
@@ -210,13 +281,15 @@ ang_s = ang |>
   dplyr::summarise(days_fished = sum(days_fished,na.rm=T)) |> 
   dplyr::ungroup()
 
-ang_s = bin_to_natural_breaks(ang_s, "days_fished")
+ang_s = bin_to_kmeans(ang_s, "days_fished", k_breaks)
 
-bins_title_ang = BAMMtools::getJenksBreaks(ang_s$days_fished, k = 4)
+bins_title_ang = getKMeansBreaks(ang_s$days_fished, k_breaks)
 
 ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = ang_s, aes(col = days_fished_bin, fill = days_fished_bin)) + 
+  geom_sf(data = ang_s, aes(col = days_fished_kmeans_bin, fill = days_fished_kmeans_bin)) + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
   ggthemes::theme_map() + 
   bin_info_labs(bins_title_ang)
 
@@ -227,11 +300,11 @@ new_wb_for_list = ang_s |>
       sf::st_drop_geometry() |> 
       dplyr::select(GNIS_NA, WATERSH)
   ) |> 
-  dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_bin)
+  dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_kmeans_bin)
 
 wb_already_in_list = ang_s |> 
   dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
-  dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_bin) |> 
+  dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_kmeans_bin) |> 
   sf::st_drop_geometry()
 
 # Not new waterbodies per list, per se, but new columns.
@@ -881,7 +954,7 @@ for (sp in species_names) {
 
 ```{r add_together_variables}
 wb_list = wb_list |> 
-  dplyr::mutate(priority = as.numeric(TotalInspections_bin, na.rm = T) + as.numeric(insp_from_wd_bc_wb_b, na.rm = T) + as.numeric(days_fished_bin, na.rm = T))
+  dplyr::mutate(priority = as.numeric(TotalInspections_kmeans_bin, na.rm = T) + as.numeric(insp_from_wd_bc_wb_b, na.rm = T) + as.numeric(days_fished_kmeans_bin, na.rm = T))
 ```
 
 
