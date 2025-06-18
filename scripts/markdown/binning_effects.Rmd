@@ -1,0 +1,522 @@
+---
+title: "Effect of bins"
+author: "John Phelan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+library(tidyverse)
+library(readxl)
+library(BAMMtools)
+library(terra)
+#devtools::install_github("yutannihilation/ggsflabel")
+library(ggsflabel)
+library(tidyterra)
+library(sf)
+
+options(scipen = 999)
+
+k_breaks = 3
+
+base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
+# proj_wd = getwd()
+# if(stringr::str_detect(proj_wd,"scripts")){
+#   proj_wd = stringr::str_remove(proj_wd, "scripts/markdown")
+# }
+
+
+# This function finds the natural breaks (or, "Jenks") for a numeric column
+bin_to_natural_breaks = function(dat,variable){
+  # find natural breaks ("jenks")
+  nbreaks = BAMMtools::getJenksBreaks(var = dat[[variable]], k = 4)
+  dat |> 
+    dplyr::rename(var_to_bin = !!rlang::sym(variable)) |> 
+    dplyr::mutate(var_bin = as.numeric(cut(var_to_bin,nbreaks))) |> 
+    dplyr::mutate(var_bin = tidyr::replace_na(var_bin, 1)) |> 
+    dplyr::mutate(var_bin = as.character(var_bin)) |> 
+    dplyr::mutate(var_bin = factor(var_bin, levels = c(1:3))) |> 
+    dplyr::rename(!!rlang::sym(paste0(variable,"_natural_bin")) := var_bin,
+                  !!rlang::sym(variable) := var_to_bin)
+}
+
+#k-means clustering function
+bin_to_kmeans <- function(dat, variable, centers = k_breaks) {
+  has_geometry <- inherits(dat, "sf")
+  
+  # Store and drop geometry if present
+  if (has_geometry) {
+    geometry <- sf::st_geometry(dat)
+    dat_df <- sf::st_drop_geometry(dat)
+  } else {
+    dat_df <- dat
+  }
+
+  # Identify valid rows
+  valid_rows <- is.finite(dat_df[[variable]])
+  dat_df_valid <- dat_df[valid_rows, ]
+
+  # Run k-means clustering
+  set.seed(123)
+  km <- stats::kmeans(dat_df_valid[[variable]], centers = centers, iter.max = 100)
+
+  # Reorder cluster labels by mean value
+  cluster_means <- tapply(dat_df_valid[[variable]], km$cluster, mean)
+  ordered_clusters <- order(cluster_means)
+  relabeled_clusters <- match(km$cluster, ordered_clusters)
+
+  # Assign bins back to full dataset
+  dat_df$var_bin <- NA
+  dat_df$var_bin[valid_rows] <- relabeled_clusters
+
+  # Final formatting
+  dat_df <- dat_df |> 
+    dplyr::rename(var_to_bin = !!rlang::sym(variable)) |> 
+    dplyr::mutate(var_bin = as.character(var_bin)) |> 
+    dplyr::mutate(var_bin = factor(var_bin, levels = as.character(1:centers))) |> 
+    dplyr::rename(
+      !!rlang::sym(paste0(variable, "_kmeans_bin")) := var_bin,
+      !!rlang::sym(variable) := var_to_bin
+    )
+
+  # Reattach geometry if present
+  if (has_geometry) {
+    dat_df <- sf::st_as_sf(dat_df)
+    sf::st_geometry(dat_df) <- geometry
+  }
+
+  return(dat_df)
+}
+
+
+
+## GGplot label convenience function
+bin_info_labs = function(bins_title){
+    labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)',
+       subtitle = paste0("Inspection Bins: 1 ('low', ",
+                         bins_title[1]," to ",bins_title[2],
+                         "), 2 ('medium', ",
+                         bins_title[2]," to ",bins_title[3],
+                         "), 3 ('high', ",
+                         bins_title[3]," to ",bins_title[4],
+                         ")"))
+}
+
+getKMeansBreaks <- function(var, k = 3) {
+  var_clean <- var[!is.na(var)]  # remove NAs
+  set.seed(123)  # for reproducibility
+  km <- stats::kmeans(var_clean, centers = k)
+  centers <- sort(km$centers)
+  # Compute midpoints between sorted centers
+  breaks <- c(min(var_clean),
+              zoo::rollmean(centers, 2),
+              max(var_clean))
+  return(breaks)
+}
+
+```
+
+```{r data}
+
+insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
+insp_from_wd_bc_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_BC_WD_Infected_Waterbodies.gpkg")
+ang = sf::read_sf("W:/CMadsen/shared_data_sets/freshwater_fisheries_society_angler_survey_2022_2023.gpkg")
+
+
+```
+
+```{r binning_inspection_data}
+
+insp_from_wd_inf_to_wb_b = bin_to_natural_breaks(insp_from_wd_inf_to_wb, 'TotalInspections')
+
+insp_from_wd_inf_to_wb_b = bin_to_kmeans(insp_from_wd_inf_to_wb_b, 'TotalInspections')
+
+insp_from_wd_inf_to_wb_b = insp_from_wd_inf_to_wb_b |> 
+  dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
+
+```
+
+```{r binning_inspection_data_bc}
+
+insp_from_wd_bc_wb_b = bin_to_natural_breaks(insp_from_wd_bc_wb, 'TotalInspections')
+insp_from_wd_bc_wb_b = bin_to_kmeans(insp_from_wd_bc_wb_b, 'TotalInspections')
+
+insp_from_wd_bc_wb_b = insp_from_wd_bc_wb_b |> 
+  dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
+
+```
+
+```{r binning_angler_data}
+ang_b = bin_to_natural_breaks(ang, 'days_fished')
+ang_b = bin_to_kmeans(ang_b, 'days_fished')
+
+```
+
+
+
+## Binning data {.tabset}
+
+Natural breaks identify groupings by minimizing variance within bins and maximizing variance between bins based on the data distribution. Essentially, this method finds “natural” gaps or clusters in the data and sets bin boundaries accordingly. It is especially useful when the data are unevenly distributed or contain distinct clusters, as it adapts to the inherent structure of the data.
+
+K-means clustering is a method that partitions data into a specified number of groups by minimizing the distance between data points and their assigned cluster centers. It tries to create clusters with similar values by iteratively adjusting cluster centers. The bin boundaries are then derived from these cluster centers. This approach assumes roughly spherical clusters and tends to balance cluster sizes, which can lead to different bin cutoffs compared to natural breaks.
+
+The natural breaks method produced bins that align with natural groupings in the  data, capturing irregular clusters and gaps. In contrast, k-means bin boundaries are influenced by the overall grouping of data points into clusters, potentially smoothing over irregularities.
+
+Choosing between these methods depends on the goal. If the intent is to highlight distinct groupings in effort that reflect natural patterns, natural breaks may be better. If the aim is to create balanced group sizes or identify typical cluster centers, k-means may be more appropriate.
+
+
+### Natural breaks - Inspections from out of province
+
+```{r break_values_insp}
+bins_title = BAMMtools::getJenksBreaks(var = insp_from_wd_inf_to_wb$TotalInspections, k = 4)
+
+bin_assignments <- cut(
+  insp_from_wd_inf_to_wb$TotalInspections,
+  breaks = bins_title,
+  include.lowest = TRUE,
+  labels = FALSE
+)
+
+```
+
+The inspection bins are: 1 ('low', `r bins_title[1]` to `r bins_title[2]`), 2 ('medium', `r bins_title[2]` to `r bins_title[3]`), and 3 ('high', `r bins_title[3]` to `r bins_title[4]`).
+
+
+```{r natural_breaks}
+# plots of the natural break data
+
+
+nat_inspec<-ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(fill = TotalInspections_natural_bin,
+                                               col = TotalInspections_natural_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)')
+
+nat_inspec
+
+```
+
+### Natural breaks - Inspections from BC infected waterbodies
+
+```{r break_value_insp_bc}
+bins_title_bc = BAMMtools::getJenksBreaks(var = insp_from_wd_bc_wb$TotalInspections, k = 4)
+
+```
+
+The inspection bins are: 1 ('low', `r bins_title_bc[1]` to `r bins_title_bc[2]`), 2 ('medium', `r bins_title_bc[2]` to `r bins_title_bc[3]`), and 3 ('high', `r bins_title_bc[3]` to `r bins_title_bc[4]`).
+
+```{r plot_inspections_bc}
+
+nat_inspec_bc<-ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_natural_bin,
+                                               col = TotalInspections_natural_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)')
+nat_inspec_bc
+```
+
+### Natural breaks - Angler Data
+
+```{r break_value_angler}
+bins_title_ang = BAMMtools::getJenksBreaks(var = ang$days_fished, k = 4)
+```
+
+The angler bins are: 1 ('low', `r bins_title_ang[1]` to `r bins_title_ang[2]`), 2 ('medium', `r bins_title_ang[2]` to `r bins_title_ang[3]`), and 3 ('high', `r bins_title_ang[3]` to `r bins_title_ang[4]`).
+
+```{r plot_angler}
+nat_angler<-ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = ang_b, aes(fill = days_fished_natural_bin,
+                                               col = days_fished_natural_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Days Fished (bin)',
+       fill = 'Days Fished (bin)')
+
+nat_angler
+```
+
+### K-means - Inspections from out of province
+
+```{r kmeans_inspection}
+
+
+bins_kmeans <- getKMeansBreaks(insp_from_wd_inf_to_wb$TotalInspections, k_breaks)
+
+```
+
+The inspection bins are: 1 ('low', `r round(bins_kmeans[1],0)` to `r round(bins_kmeans[2],0)`), 2 ('medium', `r round(bins_kmeans[2],0)` to `r round(bins_kmeans[3],0)`), and 3 ('high', `r round(bins_kmeans[3],0)` to `r round(bins_kmeans[4],0)`).
+
+```{r kmeans_inspection_plot}
+kmeans_inspec<-ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(fill = TotalInspections_kmeans_bin,
+                                               col = TotalInspections_kmeans_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)')
+kmeans_inspec
+```
+
+### K-means - Inspections from BC infected waterbodies
+```{r kmeans_inspection_bc}
+bins_kmeans_bc <- getKMeansBreaks(insp_from_wd_bc_wb$TotalInspections, k_breaks)
+```
+
+The inspection bins are: 1 ('low', `r round(bins_kmeans_bc[1],0)` to `r round(bins_kmeans_bc[2],0)`), 2 ('medium', `r round(bins_kmeans_bc[2],0)` to `r round(bins_kmeans_bc[3],0)`), and 3 ('high', `r round(bins_kmeans_bc[3],0)` to `r round(bins_kmeans_bc[4],0)`).
+
+```{r kmeans_inspection_bc_plot}
+kmeans_inspec_bc<-ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_kmeans_bin,
+                                               col = TotalInspections_kmeans_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Inspections (bin)',
+       fill = 'Inspections (bin)')
+kmeans_inspec_bc
+```
+
+### K-means - Angler Data
+```{r kmeans_angler}
+bins_kmeans_ang <- getKMeansBreaks(ang$days_fished, k_breaks)
+```
+
+The angler bins are: 1 ('low', `r round(bins_kmeans_ang[1],0)` to `r round(bins_kmeans_ang[2],0)`), 2 ('medium', `r round(bins_kmeans_ang[2],0)` to `r round(bins_kmeans_ang[3],0)`), and 3 ('high', `r round(bins_kmeans_ang[3],0)` to `r round(bins_kmeans_ang[4],0)`).
+
+```{r kmeans_angler_plot}
+kmeans_angler<-ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = ang_b, aes(fill = days_fished_kmeans_bin,
+                                               col = days_fished_kmeans_bin)) + 
+  ggthemes::theme_map() + 
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) + 
+  labs(color = 'Days Fished (bin)',
+       fill = 'Days Fished (bin)')
+kmeans_angler
+```
+
+### Comparison of Binning Methods
+```{r comparison_of_bins, fig.width = 12, fig.height = 8}
+gridExtra::grid.arrange(nat_inspec, kmeans_inspec, nat_inspec_bc, kmeans_inspec_bc, nat_angler, kmeans_angler,
+                         ncol = 2, nrow = 3,
+                         top = "Comparison of Binning Methods for Inspections and Angler Data")
+```
+
+### Summary of Binning Methods
+```{r summary_of_bins}
+summary_bins <- tibble(
+  Method = c("Natural Breaks", "K-means"),
+  Inspections_Out_of_Province = c(
+    paste0("1: ", round(bins_title[1]), " to ", round(bins_title[2]), 
+           ", 2: ", round(bins_title[2]), " to ", round(bins_title[3]), 
+           ", 3: ", round(bins_title[3]), " to ", round(bins_title[4])),
+    paste0("1: ", round(bins_kmeans[1]), " to ", round(bins_kmeans[2]), 
+           ", 2: ", round(bins_kmeans[2]), " to ", round(bins_kmeans[3]), 
+           ", 3: ", round(bins_kmeans[3]), " to ", round(bins_kmeans[4]))
+  ),
+  Inspections_BC_Infected = c(
+    paste0("1: ", round(bins_title_bc[1]), " to ", round(bins_title_bc[2]), 
+           ", 2: ", round(bins_title_bc[2]), " to ", round(bins_title_bc[3]), 
+           ", 3: ", round(bins_title_bc[3]), " to ", round(bins_title_bc[4])),
+    paste0("1: ", round(bins_kmeans_bc[1]), " to ", round(bins_kmeans_bc[2]), 
+           ", 2: ", round(bins_kmeans_bc[2]), " to ", round(bins_kmeans_bc[3]), 
+           ", 3: ", round(bins_kmeans_bc[3]), " to ", round(bins_kmeans_bc[4]))
+  ),
+  Angler_Days_Fished = c(
+    paste0("1: ", round(bins_title_ang[1]), " to ", round(bins_title_ang[2]), 
+           ", 2: ", round(bins_title_ang[2]), " to ", round(bins_title_ang[3]), 
+           ", 3: ", round(bins_title_ang[3]), " to ", round(bins_title_ang[4])),
+    paste0("1: ", round(bins_kmeans_ang[1]), " to ", round(bins_kmeans_ang[2]), 
+           ", 2: ", round(bins_kmeans_ang[2]), " to ", round(bins_kmeans_ang[3]), 
+           ", 3: ", round(bins_kmeans_ang[3]), " to ", round(bins_kmeans_ang[4]))
+  )
+)
+
+summary_bins |> 
+  knitr::kable(caption = "Summary of Binning Methods for Inspections and Angler Data")
+```
+
+### Comparison of Inspection Data Binning Methods
+
+```{r insp_comparison}
+insp_b_diff <- insp_from_wd_inf_to_wb_b |> 
+  st_drop_geometry() |> 
+  mutate(
+    natural_rank = as.numeric(factor(TotalInspections_natural_bin, ordered = TRUE)),
+    kmeans_rank = as.numeric(factor(TotalInspections_kmeans_bin, ordered = TRUE)),
+    rank_diff = kmeans_rank - natural_rank) |> 
+  arrange(desc(abs(rank_diff))) |>  # most different at top
+  dplyr::select(
+    WATERSH,
+    GNIS_NA,
+    TotalInspections_natural_bin,
+    TotalInspections_kmeans_bin,
+    natural_rank,
+    kmeans_rank,
+    rank_diff
+  )
+# View changes
+DT::datatable(insp_b_diff, 
+               options = list(pageLength = 10, 
+                              autoWidth = TRUE, 
+                              columnDefs = list(list(className = 'dt-center', targets = "_all"))),
+               rownames = FALSE,
+               caption = "Comparison of Inspection Data Binning Methods")
+```
+
+### Comparison of Inspection Data Binning Methods (BC Infected)
+```{r insp_comparison_bc}
+insp_b_diff_bc <- insp_from_wd_bc_wb_b |> 
+  st_drop_geometry() |> 
+  mutate(
+    natural_rank = as.numeric(factor(TotalInspections_natural_bin, ordered = TRUE)),
+    kmeans_rank = as.numeric(factor(TotalInspections_kmeans_bin, ordered = TRUE)),
+    rank_diff = kmeans_rank - natural_rank) |> 
+  arrange(desc(abs(rank_diff))) |>   # most different at top 
+  dplyr::select(
+    WATERSH,
+    GNIS_NA,
+    TotalInspections_natural_bin,
+    TotalInspections_kmeans_bin,
+    natural_rank,
+    kmeans_rank,
+    rank_diff
+  )
+# View changes
+DT::datatable(insp_b_diff_bc, 
+               options = list(pageLength = 10, 
+                              autoWidth = TRUE, 
+                              columnDefs = list(list(className = 'dt-center', targets = "_all"))),
+               rownames = FALSE,
+               caption = "Comparison of Inspection Data Binning Methods (BC Infected)")
+```
+
+
+### Comparison of Angler Data Binning Methods
+
+```{r ang_comparison}
+ang_b_diff <- ang_b |> 
+  st_drop_geometry() |> 
+  mutate(
+    natural_rank = as.numeric(factor(days_fished_natural_bin, ordered = TRUE)),
+    kmeans_rank = as.numeric(factor(days_fished_kmeans_bin, ordered = TRUE)),
+    rank_diff = kmeans_rank - natural_rank) |> 
+  arrange(desc(abs(rank_diff))) |>  
+  dplyr::select(
+    WATERSHED_GROUP_ID,
+    Waterbody,
+    days_fished_natural_bin,
+    days_fished_kmeans_bin,
+    natural_rank,
+    kmeans_rank,
+    rank_diff
+  )
+  
+# View changes
+DT::datatable(
+  ang_b_diff |> dplyr::rename(WATERSH = WATERSHED_GROUP_ID),
+  options = list(
+    pageLength = 10,
+    autoWidth = TRUE,
+    columnDefs = list(list(className = 'dt-center', targets = "_all"))
+  ),
+  rownames = FALSE,
+  caption = "Comparison of Angler Data Binning Methods"
+)
+
+```
+
+### Priority Scores - Difference in method scores
+```{r priority_scores_natural_breaks}
+
+# 1. Drop geometry and select relevant columns with native pipe
+
+inf_to_bc_bins <- insp_from_wd_inf_to_wb_b |>
+  sf::st_drop_geometry() |>
+  dplyr::select(
+    WATERSH,
+    GNIS_NA,
+    inf_to_bc_nat_bin = TotalInspections_natural_bin,
+    inf_to_bc_kmns_bin = TotalInspections_kmeans_bin
+  )
+
+bc_wd_bins <- insp_from_wd_bc_wb_b |>
+  sf::st_drop_geometry() |>
+  dplyr::select(
+    WATERSH,
+    GNIS_NA,
+    bc_wd_nat_bin = TotalInspections_natural_bin,
+    bc_wd_kmns_bin = TotalInspections_kmeans_bin
+  )
+
+ang_bins <- ang_b |>
+  sf::st_drop_geometry() |>
+  dplyr::rename(
+    WATERSH = WATERSHED_GROUP_ID,
+    GNIS_NA = Waterbody
+  ) |>
+  dplyr::select(
+    WATERSH,
+    GNIS_NA,
+    ang_nat_bin = days_fished_natural_bin,
+    ang_kmns_bin = days_fished_kmeans_bin
+  )
+
+# 2. Join and calculate separate priorities
+
+priority_table <- inf_to_bc_bins |>
+  dplyr::full_join(bc_wd_bins, by = c("WATERSH", "GNIS_NA")) |>
+  dplyr::full_join(ang_bins, by = c("WATERSH", "GNIS_NA")) |>
+  dplyr::mutate(
+    # Convert factors/characters to numeric if needed
+    inf_to_bc_nat_bin = as.numeric(as.character(inf_to_bc_nat_bin)),
+    bc_wd_nat_bin = as.numeric(as.character(bc_wd_nat_bin)),
+    ang_nat_bin = as.numeric(as.character(ang_nat_bin)),
+    inf_to_bc_kmns_bin = as.numeric(as.character(inf_to_bc_kmns_bin)),
+    bc_wd_kmns_bin = as.numeric(as.character(bc_wd_kmns_bin)),
+    ang_kmns_bin = as.numeric(as.character(ang_kmns_bin))
+  ) |>
+  dplyr::mutate(
+    # Replace NAs with 0
+    inf_to_bc_nat_bin = tidyr::replace_na(inf_to_bc_nat_bin, 0),
+    bc_wd_nat_bin = tidyr::replace_na(bc_wd_nat_bin, 0),
+    ang_nat_bin = tidyr::replace_na(ang_nat_bin, 0),
+    inf_to_bc_kmns_bin = tidyr::replace_na(inf_to_bc_kmns_bin, 0),
+    bc_wd_kmns_bin = tidyr::replace_na(bc_wd_kmns_bin, 0),
+    ang_kmns_bin = tidyr::replace_na(ang_kmns_bin, 0)
+  ) |>
+  dplyr::mutate(
+    # Calculate separate total priorities
+    total_priority_natural = inf_to_bc_nat_bin + bc_wd_nat_bin + ang_nat_bin,
+    total_priority_kmeans = inf_to_bc_kmns_bin + bc_wd_kmns_bin + ang_kmns_bin,
+    difference_methods = total_priority_natural - total_priority_kmeans
+  )
+
+DT::datatable(priority_table, 
+               options = list(pageLength = 10, 
+                              autoWidth = TRUE, 
+                              columnDefs = list(list(className = 'dt-center', targets = "_all"))),
+               rownames = FALSE,
+               caption = "Priority Scores for Natural Breaks and K-means Binning Methods")
+```
+
+
+
