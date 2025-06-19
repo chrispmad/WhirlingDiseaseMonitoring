@@ -17,6 +17,7 @@ library(terra)
 library(ggsflabel)
 library(tidyterra)
 library(sf)
+library(bcdata)
 
 
 requery_occs = F
@@ -419,7 +420,6 @@ wb_list = wb_list |>
 
 ### Connectivity of Infected Watersheds {.tabset}
 ```{r}
-library(bcdata)
 if(!file.exists("data/named_watersheds_of_bc.rds")){
   # small_watersheds = bcdc_query_geodata('freshwater-atlas-named-watersheds') |> 
   small_watersheds = bcdc_query_geodata('wsa-third-order-and-greater-watersheds-50-000') |> 
@@ -645,98 +645,6 @@ ggplot() +
   geom_sf(data = pos_fish_edna_sf_albers)
 ```
 
-#### Leaflet Map
-```{r}
-library(leaflet)
-
-add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
-  if(!is.na(labelcol)){
-    l = l |> 
-      addPolygons(
-      data = dat |> sf::st_transform(4326),
-      fillColor = fillcolor,
-      color = 'black',
-      weight = 1.5,
-      label = dat[[labelcol]],
-      fillOpacity = 0.8,
-      group = groupname,
-      options = pathOptions(pane = pane_name)
-    )
-  } else {
-    l = l |> 
-      addPolygons(
-      data = dat |> sf::st_transform(4326),
-      fillColor = fillcolor,
-      color = 'black',
-      weight = 1.5,
-      fillOpacity = 0.8,
-      group = groupname,
-      options = pathOptions(pane = pane_name)
-    )
-  }
-  l
-}
-
-leaflet() |> 
-  addTiles(group = 'openStreetMap') |> 
-  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
-  addLayersControl(baseGroups = c("cartoDB","openStreetMap"),
-                   overlayGroups = c("adjacent","infectable","infected",'infectable wbs','PSCIS','dams','positive fish samples'),
-                   options = layersControlOptions(collapsed = F)) |> 
-  addMapPane("wsg_p", zIndex = 200) |> 
-  addMapPane("adjacent_p", zIndex = 210) |> 
-  addMapPane("infectable_p", zIndex = 300) |> 
-  addMapPane("infected_p", zIndex = 400) |> 
-  addMapPane("infectable_wbs_p", zIndex = 500) |> 
-  addMapPane("PSCIS_and_dams_p", zIndex = 600) |> 
-  addMapPane("pos_fish_p", zIndex = 700) |> 
-  add_my_poly(wsg, 'white', groupname = 'goop', pane_name = 'wsg_p') |>
-  add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |> 
-  add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |> 
-  add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |> 
-  add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |> 
-  addCircleMarkers(
-    data = dplyr::bind_rows(
-      pscis_in_area,
-      pscis_near_rivers
-    ) |> sf::st_transform(4326),
-    color = 'green',
-    radius = 1,
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    label = ~CROSSING_TYPE_DESC,
-    group = 'PSCIS',
-    options = pathOptions(pane = 'PSCIS_and_dams_p')
-  ) |> 
-  addPolygons(
-    data = dams |> sf::st_transform(4326),
-    color = 'brown',
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    label = ~DAM_NAME,
-    popup = lapply(leafpop::popupTable(dams |> 
-                                  sf::st_drop_geometry() |> 
-                                  dplyr::select(DAM_NAME,DAM_TYPE,
-                                                DAM_HEIGHT,CREST_LENGTH)),
-                   htmltools::HTML),
-    group = 'dams',
-    options = pathOptions(pane = 'PSCIS_and_dams_p')
-  ) |> 
-   addCircleMarkers(
-    data = pos_fish_edna_sf,
-    color = 'black',
-    fillColor = '#00e7cf',
-    radius = 6,
-    weight = 0.5,
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    label = ~paste0("Positive fish sample at ",sample_site_name),
-    group = 'positive fish samples',
-    options = pathOptions(pane = 'pos_fish_p')
-  )
-```
-
-
 ### Downstream Infectable Waterbodies
 ```{r}
 downstream_infectable_waterbodies = rivers_in_infectable_adj_watersheds |> 
@@ -770,6 +678,38 @@ wb_list = wb_list |>
   dplyr::left_join(wb_list_infectables) |> 
   dplyr::mutate(infectable = tidyr::replace_na(infectable, FALSE))
 ```
+
+### Water Authorizations
+```{r snag_water_auths}
+water_apps = bcdc_query_geodata('water-approval-points') |> 
+  filter(INTERSECTS(wsg)) |> 
+  collect()
+
+water_apps = water_apps |> 
+  dplyr::mutate(approval_status = dplyr::case_when(
+    APPROVAL_STATUS %in% c("Abandoned","Aborted","Cancelled","Expired") ~ "Abandoned/Cancelled/Expired",
+    T ~ APPROVAL_STATUS
+  ))
+
+ggplot() + 
+  geom_sf(data = wsg, fill = 'white') + 
+  geom_sf(data = water_apps, aes(col = approval_status))
+
+water_apps_w_wb_info = water_apps |> 
+  dplyr::filter(approval_status == 'Current') |>
+  sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH))
+
+number_water_apps_per_wb = water_apps_w_wb_info |> 
+  dplyr::filter(!is.na(GNIS_NA)) |> 
+  sf::st_drop_geometry() |> 
+  dplyr::count(GNIS_NA,WATERSH, name = "active_water_authorizations")
+
+wb_list = wb_list |> 
+  dplyr::left_join(number_water_apps_per_wb) |> 
+  dplyr::mutate(active_water_authorizations = tidyr::replace_na(active_water_authorizations, 0))
+```
+
+If we only take Water Authorization points of status type 'Current' and drop all the rest, there are `r nrow(water_apps |> dplyr::filter(approval_status == 'Current'))` points to consider; `r nrow(water_apps_w_wb_info |> dplyr::filter(!is.na(GNIS_NA)))` of these overlap with one of the waterbodies with at least one watercraft inspection tied to it or at least one mention of it in the angler survey data.
 
 ### Overlay of Positive Tubifex Results
 
@@ -947,22 +887,156 @@ for (sp in species_names) {
 
 ```
 			
-			
-			
-			ix. Add in expert opinion from regions, First Nations, etc., as available
-			x. In future, we'll bring in SARA-listed species / COSEWIC
+ix. Add in expert opinion from regions, First Nations, etc., as available
+x. In future, we'll bring in SARA-listed species / COSEWIC
 
 ```{r add_together_variables}
 wb_list = wb_list |> 
-  dplyr::mutate(priority = as.numeric(TotalInspections_kmeans_bin, na.rm = T) + as.numeric(insp_from_wd_bc_wb_b, na.rm = T) + as.numeric(days_fished_kmeans_bin, na.rm = T))
+  dplyr::mutate(tib = as.numeric(TotalInspections_kmeans_bin),
+                iwbc = as.numeric(insp_from_wd_bc_wb_b),
+                dfb = as.numeric(days_fished_kmeans_bin)) |> 
+  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb)) |> 
+  dplyr::select(-c(tib,iwbc,dfb))
 ```
 
-
-### Final Table with Overlayed Data
+### Table of All Waterbodies with Data
 
 ```{r show_results_data_table}
 wb_list |> 
   sf::st_drop_geometry() |> 
   DT::datatable(filter = 'top', options = list(
   pageLength = 5, autoWidth = TRUE))
+```
+
+### Final Table for Infected Watershed's Waterbodies
+
+```{r show_final_results_data_table}
+wb_list_in_wsg = wb_list |> 
+  sf::st_filter(adj_small_watersheds) |> 
+  sf::st_transform(4326)
+
+wb_list_in_wsg |> 
+  sf::st_drop_geometry() |> 
+  DT::datatable(filter = 'top', options = list(
+  pageLength = 5, autoWidth = TRUE))
+```
+
+```{r write_out_results_to_excel_file}
+my_wb = openxlsx::createWorkbook()
+openxlsx::addWorksheet(my_wb, "wbs_with_data_all_BC")
+openxlsx::addWorksheet(my_wb, "wbs_with_data_inf_WS")
+openxlsx::writeData(my_wb, "wbs_with_data_all_BC", wb_list |> 
+  sf::st_drop_geometry())
+openxlsx::writeData(my_wb, "wbs_with_data_inf_WS", wb_list_in_wsg |> 
+  sf::st_drop_geometry())
+openxlsx::setColWidths(my_wb, "wbs_with_data_all_BC", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
+openxlsx::setColWidths(my_wb, "wbs_with_data_inf_WS", cols = c(1:(ncol(wb_list_in_wsg)-1)), widths = 'auto')
+openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"))
+```
+
+### Leaflet Map
+```{r fig.width = 9, fig.height = 7}
+library(leaflet)
+
+add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
+  if(!is.na(labelcol)){
+    l = l |> 
+      addPolygons(
+      data = dat |> sf::st_transform(4326),
+      fillColor = fillcolor,
+      color = 'black',
+      weight = 1.5,
+      label = dat[[labelcol]],
+      fillOpacity = 0.8,
+      group = groupname,
+      options = pathOptions(pane = pane_name)
+    )
+  } else {
+    l = l |> 
+      addPolygons(
+      data = dat |> sf::st_transform(4326),
+      fillColor = fillcolor,
+      color = 'black',
+      weight = 1.5,
+      fillOpacity = 0.8,
+      group = groupname,
+      options = pathOptions(pane = pane_name)
+    )
+  }
+  l
+}
+
+leaflet() |> 
+  addTiles(group = 'openStreetMap') |> 
+  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
+  addLayersControl(
+    baseGroups = c("cartoDB","openStreetMap"),
+    overlayGroups = c("adjacent","infectable","infected",
+                      'infectable wbs','PSCIS','dams',
+                      'positive fish samples','wb_list'),
+    options = layersControlOptions(collapsed = F)) |> 
+  addMapPane("wsg_p", zIndex = 200) |> 
+  addMapPane("adjacent_p", zIndex = 210) |> 
+  addMapPane("infectable_p", zIndex = 300) |> 
+  addMapPane("infected_p", zIndex = 400) |> 
+  addMapPane("infectable_wbs_p", zIndex = 500) |> 
+  addMapPane("PSCIS_and_dams_p", zIndex = 600) |> 
+  addMapPane("pos_fish_p", zIndex = 700) |> 
+  addMapPane("wb_list", zIndex = 750) |> 
+  add_my_poly(wsg, 'white', groupname = 'goop', pane_name = 'wsg_p') |>
+  add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |> 
+  add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |> 
+  add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |> 
+  add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |> 
+  addCircleMarkers(
+    data = dplyr::bind_rows(
+      pscis_in_area,
+      pscis_near_rivers
+    ) |> sf::st_transform(4326),
+    color = 'green',
+    radius = 1,
+    fillOpacity = 0.8,
+    opacity = 0.8,
+    label = ~CROSSING_TYPE_DESC,
+    group = 'PSCIS',
+    options = pathOptions(pane = 'PSCIS_and_dams_p')
+  ) |> 
+  addPolygons(
+    data = dams |> sf::st_transform(4326),
+    color = 'brown',
+    fillOpacity = 0.8,
+    opacity = 0.8,
+    label = ~DAM_NAME,
+    popup = lapply(leafpop::popupTable(dams |> 
+                                  sf::st_drop_geometry() |> 
+                                  dplyr::select(DAM_NAME,DAM_TYPE,
+                                                DAM_HEIGHT,CREST_LENGTH)),
+                   htmltools::HTML),
+    group = 'dams',
+    options = pathOptions(pane = 'PSCIS_and_dams_p')
+  ) |> 
+   addCircleMarkers(
+    data = pos_fish_edna_sf,
+    color = 'black',
+    fillColor = '#00e7cf',
+    radius = 6,
+    weight = 0.5,
+    fillOpacity = 0.8,
+    opacity = 0.8,
+    label = ~paste0("Positive fish sample at ",sample_site_name),
+    group = 'positive fish samples',
+    options = pathOptions(pane = 'pos_fish_p')
+  ) |> 
+  addPolygons(
+    data = wb_list_in_wsg,
+    label = ~paste0(GNIS_NA," (waterbody with data)"),
+    popup = lapply(
+      leafpop::popupTable(
+        wb_list_in_wsg |> sf::st_drop_geometry()
+      ),
+      htmltools::HTML
+    ),
+    group = 'wb_list',
+    options = pathOptions(pane = 'wb_list')
+  )
 ```
