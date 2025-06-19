@@ -270,10 +270,10 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 ang = ang |> 
   dplyr::filter(!is.na(days_fished))
 
-# Rename some columns.
-ang = ang |> 
-  dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
-                GNIS_NA = Waterbody)
+# # Rename some columns.
+# ang = ang |> 
+#   dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
+#                 GNIS_NA = Waterbody)
 
 # Summarise at the waterbody name and watershed number level.
 ang_s = ang |> 
