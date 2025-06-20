@@ -7,6 +7,12 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{css, echo=FALSE}
+.leaflet-tooltip {
+  z-index: 1000 !important;
+}
+```
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F, warning = F, message = F)
 library(tidyverse)
@@ -117,7 +123,7 @@ bin_info_labs = function(bins_title){
   "1 ('very low', ", round(bins_title[1]), " to ", round(bins_title[2]), "), ",
   "2 ('low', ", round(bins_title[2]), " to ", round(bins_title[3]), "), ",
   "3 ('medium', ", round(bins_title[3]), " to ", round(bins_title[4]), "), ",
-  "4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
+  "\n4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
   "5 ('very high', ", round(bins_title[5]), " to ", round(bins_title[6]), ")"
 )
 )
@@ -178,7 +184,7 @@ ggplot() +
   "1 ('very low', ", round(bins_title[1]), " to ", round(bins_title[2]), "), ",
   "2 ('low', ", round(bins_title[2]), " to ", round(bins_title[3]), "), ",
   "3 ('medium', ", round(bins_title[3]), " to ", round(bins_title[4]), "), ",
-  "4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
+  "\n4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
   "5 ('very high', ", round(bins_title[5]), " to ", round(bins_title[6]), ")"
 )
 )
@@ -221,7 +227,7 @@ ggplot() +
   "1 ('very low', ", round(bins_title[1]), " to ", round(bins_title[2]), "), ",
   "2 ('low', ", round(bins_title[2]), " to ", round(bins_title[3]), "), ",
   "3 ('medium', ", round(bins_title[3]), " to ", round(bins_title[4]), "), ",
-  "4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
+  "\n4 ('high', ", round(bins_title[4]), " to ", round(bins_title[5]), "), ",
   "5 ('very high', ", round(bins_title[5]), " to ", round(bins_title[6]), ")"
 )
 )
@@ -235,12 +241,12 @@ new_wb_for_list = insp_from_wd_bc_wb_b |>
   ) |> 
   dplyr::select(GNIS_NA, WATERSH,
                 insp_from_wd_bc_wb = TotalInspections,
-                insp_from_wd_bc_wb_b = TotalInspections_kmeans_bin )
+                insp_from_wd_bc_wb_kmeans_bin = TotalInspections_kmeans_bin )
 
 wb_already_in_list = insp_from_wd_bc_wb_b |> 
   dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
   dplyr::select(GNIS_NA, WATERSH, insp_from_wd_bc_wb = TotalInspections,
-                insp_from_wd_bc_wb_b = TotalInspections_kmeans_bin ) |> 
+                insp_from_wd_bc_wb_kmeans_bin = TotalInspections_kmeans_bin ) |> 
   sf::st_drop_geometry()
 
 # Not new waterbodies per list, per se, but new columns.
@@ -893,7 +899,7 @@ x. In future, we'll bring in SARA-listed species / COSEWIC
 ```{r add_together_variables}
 wb_list = wb_list |> 
   dplyr::mutate(tib = as.numeric(TotalInspections_kmeans_bin),
-                iwbc = as.numeric(insp_from_wd_bc_wb_b),
+                iwbc = as.numeric(insp_from_wd_bc_wb_kmeans_bin),
                 dfb = as.numeric(days_fished_kmeans_bin)) |> 
   dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb)) |> 
   dplyr::select(-c(tib,iwbc,dfb))
@@ -931,11 +937,11 @@ openxlsx::writeData(my_wb, "wbs_with_data_inf_WS", wb_list_in_wsg |>
   sf::st_drop_geometry())
 openxlsx::setColWidths(my_wb, "wbs_with_data_all_BC", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
 openxlsx::setColWidths(my_wb, "wbs_with_data_inf_WS", cols = c(1:(ncol(wb_list_in_wsg)-1)), widths = 'auto')
-openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"))
+openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
 ### Leaflet Map
-```{r fig.width = 9, fig.height = 7}
+```{r fig.width = 9, fig.height = 6}
 library(leaflet)
 
 add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
@@ -966,28 +972,33 @@ add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
   l
 }
 
+priority_pal = leaflet::colorNumeric(palette = 'Spectral',
+                                     domain = wb_list_in_wsg$priority,
+                                     reverse = T)
 leaflet() |> 
   addTiles(group = 'openStreetMap') |> 
   addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
   addLayersControl(
+    position = 'bottomleft',
     baseGroups = c("cartoDB","openStreetMap"),
-    overlayGroups = c("adjacent","infectable","infected",
+    overlayGroups = c("adjacent",#"infectable",
+                      "infected",
                       'infectable wbs','PSCIS','dams',
                       'positive fish samples','wb_list'),
     options = layersControlOptions(collapsed = F)) |> 
   addMapPane("wsg_p", zIndex = 200) |> 
   addMapPane("adjacent_p", zIndex = 210) |> 
-  addMapPane("infectable_p", zIndex = 300) |> 
-  addMapPane("infected_p", zIndex = 400) |> 
-  addMapPane("infectable_wbs_p", zIndex = 500) |> 
-  addMapPane("PSCIS_and_dams_p", zIndex = 600) |> 
-  addMapPane("pos_fish_p", zIndex = 700) |> 
-  addMapPane("wb_list", zIndex = 750) |> 
+  addMapPane("infectable_p", zIndex = 250) |> 
+  addMapPane("infected_p", zIndex = 300) |> 
+  addMapPane("infectable_wbs_p", zIndex = 400) |>
+  addMapPane("PSCIS_and_dams_p", zIndex = 500) |> 
+  addMapPane("pos_fish_p", zIndex = 600) |> 
+  addMapPane("wb_list", zIndex = 650) |>
   add_my_poly(wsg, 'white', groupname = 'goop', pane_name = 'wsg_p') |>
-  add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |> 
-  add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |> 
-  add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |> 
-  add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |> 
+  add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |>
+  add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |>
+  add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |>
+  add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |>
   addCircleMarkers(
     data = dplyr::bind_rows(
       pscis_in_area,
@@ -1000,21 +1011,21 @@ leaflet() |>
     label = ~CROSSING_TYPE_DESC,
     group = 'PSCIS',
     options = pathOptions(pane = 'PSCIS_and_dams_p')
-  ) |> 
+  ) |>
   addPolygons(
     data = dams |> sf::st_transform(4326),
     color = 'brown',
     fillOpacity = 0.8,
     opacity = 0.8,
     label = ~DAM_NAME,
-    popup = lapply(leafpop::popupTable(dams |> 
-                                  sf::st_drop_geometry() |> 
+    popup = lapply(leafpop::popupTable(dams |>
+                                  sf::st_drop_geometry() |>
                                   dplyr::select(DAM_NAME,DAM_TYPE,
                                                 DAM_HEIGHT,CREST_LENGTH)),
                    htmltools::HTML),
     group = 'dams',
     options = pathOptions(pane = 'PSCIS_and_dams_p')
-  ) |> 
+  ) |>
    addCircleMarkers(
     data = pos_fish_edna_sf,
     color = 'black',
@@ -1036,7 +1047,16 @@ leaflet() |>
       ),
       htmltools::HTML
     ),
+    fillColor = ~priority_pal(priority),
+    color = ~priority_pal(priority),
+    fillOpacity = 0.8,
+    opacity = 0.8,
     group = 'wb_list',
     options = pathOptions(pane = 'wb_list')
-  )
+  ) |>
+  addLegend('topright', 
+            pal = priority_pal, 
+            values = unique(wb_list_in_wsg$priority),
+            title = 'Priority',
+            labFormat = labelFormat(transform = function(x) sort(x, decreasing = F)))
 ```
