@@ -220,6 +220,8 @@ dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rd
 nrow(ang_s |> dplyr::filter(GNIS_NA %in% dfo_ang$waterbody))
 # wbs only in the 'old' angler survey data.
 nrow(ang_s |> dplyr::filter(!GNIS_NA %in% dfo_ang$waterbody))
+
+# If > 95% of the lakes in the old dataset are present in the new, no question to just move to the new dataset. Numbers are wildly different in scale, though the ordering might be kind of similar.
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
