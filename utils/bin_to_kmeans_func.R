@@ -25,13 +25,22 @@ bin_to_kmeans <- function(dat, variable, centers = k_breaks) {
   dat_df$var_bin <- NA
   dat_df$var_bin[valid_rows] <- relabeled_clusters
 
+  wb_count_by_bin = dat_df |>
+    sf::st_drop_geometry() |>
+    dplyr::count(var_bin, name = 'number_of_wbs') |>
+    dplyr::mutate(number_of_wbs = paste0(var_bin, " (",number_of_wbs," wbs)"))
+
+  # browser()
   # Final formatting
   dat_df <- dat_df |>
+    dplyr::left_join(wb_count_by_bin) |>
     dplyr::rename(var_to_bin = !!rlang::sym(variable)) |>
-    dplyr::mutate(var_bin = as.character(var_bin)) |>
-    dplyr::mutate(var_bin = factor(var_bin, levels = as.character(1:centers))) |>
+    # dplyr::mutate(var_bin = as.character(var_bin)) |>
+    # dplyr::mutate(var_bin = factor(var_bin, levels = as.character(1:centers))) |>
+    dplyr::mutate(number_of_wbs = as.character(number_of_wbs)) |>
+    dplyr::mutate(number_of_wbs = factor(number_of_wbs, levels = wb_count_by_bin$number_of_wbs)) |>
     dplyr::rename(
-      !!rlang::sym(paste0(variable, "_kmeans_bin")) := var_bin,
+      !!rlang::sym(paste0(variable, "_kmeans_bin")) := number_of_wbs,
       !!rlang::sym(variable) := var_to_bin
     )
 

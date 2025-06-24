@@ -45,10 +45,14 @@ if(!file.exists('data/anger_survey.rds')){
   insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
   saveRDS(insp_from_wd_inf_to_wb, file = 'data/inspections_WD_outside_BC.rds')
 } else {
+  if(!exists("insp_from_wd_inf_to_wb")){
   insp_from_wd_inf_to_wb = readRDS('data/inspections_WD_outside_BC.rds')
+  }
 }
 
+if(!exists("insp_from_wd_bc_wb")){
 insp_from_wd_bc_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_BC_WD_Infected_Waterbodies.gpkg")
+}
 
 if(!file.exists('data/anger_survey.rds')){
   ang = sf::read_sf("W:/CMadsen/shared_data_sets/freshwater_fisheries_society_angler_survey_2022_2023.gpkg")
@@ -77,15 +81,17 @@ insp_from_wd_inf_to_wb_b = insp_from_wd_inf_to_wb_b |>
 bins_title = getKMeansBreaks(insp_from_wd_inf_to_wb_b$TotalInspections, k = k_breaks)
 
 # Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
+if(!interactive()){
 ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(fill = TotalInspections_kmeans_bin ,
-                                             col = TotalInspections_kmeans_bin )) + 
+  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(
+    fill = TotalInspections_kmeans_bin,
+    col = TotalInspections_kmeans_bin)) + 
   ggthemes::theme_map() + 
   scale_fill_brewer(palette = 'Spectral', direction = -1) +
   scale_color_brewer(palette = 'Spectral', direction = -1) + 
   bin_info_labs(bins_title)
-
+}
 wb_list = insp_from_wd_inf_to_wb_b |> 
   dplyr::select(GNIS_NA, WATERSH, TotalInspections, TotalInspections_kmeans_bin )
 ```
@@ -106,6 +112,7 @@ insp_from_wd_bc_wb_b = insp_from_wd_bc_wb_b |>
 bins_title_bc = getKMeansBreaks(insp_from_wd_bc_wb_b$TotalInspections, k = k_breaks)
 
 # Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
+if(!interactive()){
 ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
   geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_kmeans_bin ,
@@ -114,7 +121,7 @@ ggplot() +
   scale_fill_brewer(palette = 'Spectral', direction = -1) +
   scale_color_brewer(palette = 'Spectral', direction = -1) + 
   bin_info_labs(bins_title_bc)
-
+}
 # Identify any water bodies that aren't already in the list.
 new_wb_for_list = insp_from_wd_bc_wb_b |> 
   dplyr::anti_join(
@@ -214,9 +221,6 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 # }
 ```
 
-
-
-
 ### 2023-2024 iSEA Fishing Days
 ```{r}
 dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rds"))
@@ -230,6 +234,7 @@ dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rd
 
 binned_ang<-bin_to_kmeans(dfo_ang, "fishing_days" , k_breaks)
 bin_vals<-getKMeansBreaks(binned_ang$fishing_days, k = k_breaks)                          
+if(!interactive()){
  ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
   geom_sf(data = binned_ang, aes(col = fishing_days_kmeans_bin, fill = fishing_days_kmeans_bin)) +
@@ -237,7 +242,7 @@ bin_vals<-getKMeansBreaks(binned_ang$fishing_days, k = k_breaks)
   scale_color_brewer(palette = 'Spectral', direction = -1) +
   ggthemes::theme_map() +
   bin_info_labs(bin_vals)
-
+}
 
  binned_ang<-st_transform(binned_ang, st_crs(wb_list))
 binned_ang<- binned_ang |> 
@@ -320,22 +325,18 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 # ```
 ```
 
-
-### DFO 
-
 ### Watershed Groups with Fish Samples with WD
 
 ```{r}
 ws = sf::read_sf("W:/CMadsen/shared_data_sets/subwatersheds_BC.shp")
 
-
 edna_results = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx")) |> 
   purrr::set_names(snakecase::to_snake_case)
 
-pos_fish_edna = edna_results |> 
-  dplyr::filter(stringr::str_detect(fish_sampling_results_q_pcr_mc_detected, 'Positive'))
+pos_fish_plus_parasite_edna = edna_results |> 
+  dplyr::filter(stringr::str_detect(fish_sampling_results_q_pcr_mc_detected, 'Positive') | e_dna_results_mc == 'Weak Detection')
 
-pos_fish_edna_sf = sf::st_as_sf(pos_fish_edna,coords = c('long','lat'), crs = 4326)
+pos_fish_edna_sf = sf::st_as_sf(pos_fish_plus_parasite_edna,coords = c('long','lat'), crs = 4326)
 
 # Also pull in emerald lake, find its centroid.
 emerald_lake = bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |> 
@@ -354,6 +355,7 @@ ws_w_edna_fish = ws |>
 
 ws_bbox = sf::st_bbox(ws_w_edna_fish |> sf::st_buffer(dist = 50000))
 
+if(!interactive()){
 ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) + 
   geom_sf(data = ws_w_edna_fish, aes(fill = "Positive Fish \neDNA Results")) +
@@ -369,6 +371,7 @@ ggplot() +
            ylim = ws_bbox[c(2,4)]) + 
   ggthemes::theme_map() + 
   ggspatial::annotation_scale()
+}
 
 wb_list = wb_list |> 
   dplyr::mutate(fish_edna_positive_in_watershed = WATERSH %in% ws_w_edna_fish$WATERSHED_)
@@ -412,11 +415,13 @@ The following tabs describe our analysis of infected watersheds and which neighb
 
 #### Infected Watersheds and Rivers Therein
 ```{r show_infected_watersheds}
+if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
   geom_sf(data = small_watersheds_infected, fill = 'red') + 
   geom_sf(data = infected_rivers, col = 'darkblue', fill = 'darkblue') +
   geom_sf(data = pos_fish_edna_sf_albers)
+}
 ```
 
 ```{r}
@@ -430,12 +435,14 @@ adj_small_watersheds = small_watersheds |>
 #### Add Adjacent Watersheds
 ```{r show adjacent_small_watersheds}
 #### Infected Watersheds
+if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
   geom_sf(data = adj_small_watersheds, fill = 'yellow') +
   geom_sf(data = small_watersheds_infected, fill = 'red') +
   geom_sf(data = infected_rivers, col = 'darkblue', fill = 'darkblue') +
   geom_sf(data = pos_fish_edna_sf_albers)
+}
 ```
 
 ```{r find_rivers_downstream_of_infected_watershed_rivers}
@@ -477,6 +484,7 @@ elev_per_ID = elev_per_ID |>
 
 adj_small_watersheds$mean_elev = elev_per_ID$mean_elev
 
+if(!interactive()){
 ggplot() + 
   tidyterra::geom_spatraster(data = terra::rast(elev), alpha = 0.5) +
   geom_sf(data = wsg, fill = 'transparent', col = 'white') + 
@@ -484,6 +492,7 @@ ggplot() +
   labs(fill = 'elevation (m)') + 
   coord_sf(xlim = sf::st_bbox(wsg)[c(1,3)],
            ylim = sf::st_bbox(wsg)[c(2,4)])
+}
 ```
 
 ```{r determine_which_of_adjacent_watersheds_are_lower_downstream}
@@ -530,6 +539,7 @@ infectable_adj_watersheds = small_watersheds_infected |>
 
 #### Infectable Downstream Watersheds
 ```{r}
+if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
   geom_sf(data = adj_small_watersheds, fill = 'yellow') +
@@ -537,6 +547,7 @@ ggplot() +
   geom_sf(data = small_watersheds_infected, fill = 'red') +
   geom_sf(data = infected_rivers, col = 'darkblue', fill = 'darkblue') +
   geom_sf(data = pos_fish_edna_sf_albers)
+}
 ```
 
 #### Add Lakes and Rivers
@@ -556,6 +567,7 @@ lakes_in_infectable_adj_watersheds = bcdc_query_geodata('freshwater-atlas-lakes'
 ```
 
 ```{r show_with_lakes_and_rivers}
+if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
   geom_sf(data = adj_small_watersheds, fill = 'yellow') +
@@ -565,6 +577,7 @@ ggplot() +
   geom_sf(data = lakes_in_infectable_adj_watersheds, fill = 'blue', col = 'blue')+
   geom_sf(data = infected_rivers, col = 'darkblue', fill = 'darkblue') +
   geom_sf(data = pos_fish_edna_sf_albers)
+}
 ```
 
 #### Add Fish Passage Barriers (green) and Dams (brown)
@@ -587,6 +600,7 @@ dams = bcdc_query_geodata('bc-dams') |>
 # Clip rivers with PSCIS , buffered by like 100 meters?
 pscis_near_rivers_buff = sf::st_buffer(pscis_near_rivers, dist = 100)
 
+if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
   geom_sf(data = adj_small_watersheds, fill = 'yellow') + 
@@ -599,6 +613,7 @@ ggplot() +
   geom_sf(data = pscis_near_rivers, col = 'green') +
   geom_sf(data = dams |> sf::st_buffer(dist = 100), col = 'brown') +
   geom_sf(data = pos_fish_edna_sf_albers)
+}
 ```
 
 ### Downstream Infectable Waterbodies
@@ -647,9 +662,11 @@ water_apps = water_apps |>
     T ~ APPROVAL_STATUS
   ))
 
+if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, fill = 'white') + 
   geom_sf(data = water_apps, aes(col = approval_status))
+}
 
 water_apps_w_wb_info = water_apps |> 
   dplyr::filter(approval_status == 'Current') |>
@@ -678,6 +695,7 @@ tubifex_results = edna_results |>
 
 tubifex_results_sf = sf::st_as_sf(tubifex_results, coords = c('long','lat'), crs = 4326)
 
+if(!interactive()){
 ggplot()+
   geom_sf(data = bcmaps::bc_bound()) + 
   geom_sf(data = tubifex_results_sf, aes(col = e_dna_results_tubifex)) +
@@ -686,6 +704,7 @@ ggplot()+
   ggthemes::theme_map() + 
   ggspatial::annotation_scale()+
   theme(legend.position = 'bottom')
+}
 
 
 ws_w_edna_tubifex = ws |> 
@@ -712,7 +731,7 @@ tubifex_maxent<- terra::rast("output/habitat_maxent_tubifex_binary_fc.LQ_rm.3.ti
 #create factors for the values in the raster
 tubifex_maxent <- terra::as.factor(tubifex_maxent)
 
-
+if(!interactive()){
 ggplot() +
   tidyterra::geom_spatraster(data = tubifex_maxent) +  # Raster layer
   geom_sf(data = bcmaps::bc_bound(), fill = NA, color = "black") +  # BC boundary
@@ -725,7 +744,7 @@ ggplot() +
   ggthemes::theme_map()+
   theme(legend.position = "right",
         plot.background = element_rect(fill = 'lightblue'))
-
+}
 
 # For the wbs_list, find the overlap with the raster abd add a column for tubifex habitat suitability.
 bc_crs <- "EPSG:3005"
@@ -766,12 +785,7 @@ The species considered susceptible to whirling disease are:
 ```{r overlay_susceptible_species}
 
 # Fish occurrence records queried from typical data sources.
-all_occs = sf::read_sf(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/5_Incidental Observations/AIS_occurrences_all_sources.gpkg"))
-source("grab_occs_updated_path.R")
-# rel_occs = all_occs |> 
-#   dplyr::filter(Species %in% c("Bull trout","Sockeye salmon"))
-
-# Add queries for Bull Trout and Sockeye Salmon
+library(bcinvadeR)
 
 bc<-bcmaps::bc_bound() |> 
   sf::st_transform(4326)
@@ -781,25 +795,33 @@ species_names <- c(
   "Rainbow Trout", "Chinook Salmon", "Mountain Whitefish", 
   "Atlantic Salmon", "Brown Trout", "Brook Trout"
 )
-if(requery_occs){
-species_occs <- lapply(species_names, function(sp) {
-  ocs<-suppressMessages(suppressWarnings(grab_aq_occ_data_path_update(sp, quiet = TRUE)))
-   if (!is.null(ocs)) {
-    outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
-    sf::write_sf(ocs, outfile)
-  }
-  return(ocs)
-})
 
+if(requery_occs){
+  species_occs <- lapply(species_names, function(sp) {
+    ocs<-suppressMessages(suppressWarnings(grab_aq_occ_data(sp, quiet = TRUE)))
+    if (!is.null(ocs)) {
+      outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
+      sf::write_sf(ocs, outfile)
+    }
+    return(ocs)
+  })
+  
 }else{
   species_occs <- lapply(species_names, function(sp) {
     sf::read_sf(paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg"))
   })
 }
+
 names(species_occs) <- gsub(" ", "_", species_names)
 
 fish_occs <- bind_rows(species_occs, .id = "species")
 
+# Quick double check of mountain whitefish and rainbow trout.
+
+# ggplot() + geom_sf(data = fish_occs[fish_occs$species == 'Mountain_Whitefish',])
+# ggplot() + geom_sf(data = fish_occs[fish_occs$species == 'Rainbow_Trout',])
+
+if(!interactive()){
 ggplot() + 
   geom_sf(data = bc, color = "lightgrey") + 
   geom_sf(data = fish_occs, aes(color = as.factor(Species)))+
@@ -808,7 +830,7 @@ ggplot() +
   labs(color = "Species") +
   ggthemes::theme_map()+
   theme(legend.position = "bottom")
-  
+}
 
 # now is there an overlap of susceptible fish with the wb_list, for each species, new column with TRUE/FALSE for the species 
 
@@ -840,9 +862,27 @@ for (sp in species_names) {
   }
 }
 
+# ggplot() + 
+#   geom_sf(data = wb_list[str_detect(wb_list$Fish_present,"Rainbow"),]) +
+#   geom_sf(data = fish_occs[fish_occs$species == 'Rainbow_Trout',], col = 'yellow') 
+
+# # An alternative to the above!
+# fish_occs_by_wb = fish_occs |> 
+#   st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH))
+# 
+# fish_occs_by_wb = fish_occs_by_wb |> 
+#   sf::st_drop_geometry() |> 
+#   dplyr::group_by(GNIS_NA, WATERSH) |> 
+#   dplyr::reframe(Species = paste0(unique(Species), collapse = ', '))
+# 
+# wb_list = wb_list |> 
+#   dplyr::left_join(fish_occs_by_wb)
+
+# wb_list |> dplyr::filter(str_detect(Fish_present,"[rR]ainbow"))
+
+# The above looks perfect!
+
 sara <-sf::st_read(paste0(onedrive_wd,"DFO_SARA/dfo_sara_occurrences_in_BC_no_marine.gpkg"))
-
-
 
 sara <- sf::st_transform(sara, st_crs(wb_list))
 wb_list$SARA<-NA
