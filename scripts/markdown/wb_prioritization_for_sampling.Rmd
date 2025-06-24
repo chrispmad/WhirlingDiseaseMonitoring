@@ -149,79 +149,131 @@ if(nrow(new_wb_for_list) > 0){
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
-### Freshwater Fisheries Society Angler Survey (2022-2023)
 
 ```{r}
-# We do have angler use as a raster on onedrive, but we also have the original polygon object on the W: drive.
-# ang = terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
-
-
-# Drop waterbodies with no fishing
-ang = ang |> 
-  dplyr::filter(!is.na(days_fished))
-
-# # Rename some columns.
+# ### Freshwater Fisheries Society Angler Survey (2022-2023)
+# 
+# ```{r}
+# # We do have angler use as a raster on onedrive, but we also have the original polygon object on the W: drive.
+# # ang = terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
+# 
+# 
+# # Drop waterbodies with no fishing
 # ang = ang |> 
-#   dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
-#                 GNIS_NA = Waterbody)
+#   dplyr::filter(!is.na(days_fished))
+# 
+# # # Rename some columns.
+# # ang = ang |> 
+# #   dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
+# #                 GNIS_NA = Waterbody)
+# 
+# # Summarise at the waterbody name and watershed number level.
+# ang_s = ang |> 
+#   dplyr::group_by(GNIS_NA, WATERSH) |> 
+#   dplyr::summarise(days_fished = sum(days_fished,na.rm=T)) |> 
+#   dplyr::ungroup()
+# 
+# ang_s = bin_to_kmeans(ang_s, "days_fished", k_breaks)
+# 
+# bins_title_ang = getKMeansBreaks(ang_s$days_fished, k_breaks)
+# 
+# ggplot() + 
+#   geom_sf(data = bcmaps::bc_bound()) +
+#   geom_sf(data = ang_s, aes(col = days_fished_kmeans_bin, fill = days_fished_kmeans_bin)) + 
+#   scale_fill_brewer(palette = 'Spectral', direction = -1) +
+#   scale_color_brewer(palette = 'Spectral', direction = -1) + 
+#   ggthemes::theme_map() + 
+#   bin_info_labs(bins_title_ang)
+# 
+# # Identify any water bodies that aren't already in the list.
+# new_wb_for_list = ang_s |> 
+#   dplyr::anti_join(
+#     wb_list |> 
+#       sf::st_drop_geometry() |> 
+#       dplyr::select(GNIS_NA, WATERSH)
+#   ) |> 
+#   dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_kmeans_bin)
+# 
+# wb_already_in_list = ang_s |> 
+#   dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
+#   dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_kmeans_bin) |> 
+#   sf::st_drop_geometry()
+# 
+# # Not new waterbodies per list, per se, but new columns.
+# wb_list = wb_list |> 
+#   dplyr::left_join(
+#     wb_already_in_list
+#   )
+# 
+# # Are there any new waterbodies to be added to the wb_list?
+# if(nrow(new_wb_for_list) > 0){
+#   wb_list = wb_list |> 
+#     dplyr::bind_rows(
+#       new_wb_for_list
+#     )
+# }
+```
 
-# Summarise at the waterbody name and watershed number level.
-ang_s = ang |> 
-  dplyr::group_by(GNIS_NA, WATERSH) |> 
-  dplyr::summarise(days_fished = sum(days_fished,na.rm=T)) |> 
-  dplyr::ungroup()
 
-ang_s = bin_to_kmeans(ang_s, "days_fished", k_breaks)
 
-bins_title_ang = getKMeansBreaks(ang_s$days_fished, k_breaks)
 
-ggplot() + 
+### 2023-2024 iSEA Fishing Days
+```{r}
+dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rds"))
+# 
+# # wbs present in both
+# nrow(ang_s |> dplyr::filter(GNIS_NA %in% dfo_ang$waterbody))
+# # wbs only in the 'old' angler survey data.
+# nrow(ang_s |> dplyr::filter(!GNIS_NA %in% dfo_ang$waterbody))
+
+# If > 95% of the lakes in the old dataset are present in the new, no question to just move to the new dataset. Numbers are wildly different in scale, though the ordering might be kind of similar.
+
+binned_ang<-bin_to_kmeans(dfo_ang, "fishing_days" , k_breaks)
+bin_vals<-getKMeansBreaks(binned_ang$fishing_days, k = k_breaks)                          
+ ggplot() + 
   geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = ang_s, aes(col = days_fished_kmeans_bin, fill = days_fished_kmeans_bin)) + 
+  geom_sf(data = binned_ang, aes(col = fishing_days_kmeans_bin, fill = fishing_days_kmeans_bin)) +
   scale_fill_brewer(palette = 'Spectral', direction = -1) +
-  scale_color_brewer(palette = 'Spectral', direction = -1) + 
-  ggthemes::theme_map() + 
-  bin_info_labs(bins_title_ang)
+  scale_color_brewer(palette = 'Spectral', direction = -1) +
+  ggthemes::theme_map() +
+  bin_info_labs(bin_vals)
 
+
+ binned_ang<-st_transform(binned_ang, st_crs(wb_list))
+binned_ang<- binned_ang |> 
+  dplyr::rename( GNIS_NA = waterbody,
+                WATERSH = watershed,
+                days_fished = fishing_days,
+                days_fished_kmeans_bin = fishing_days_kmeans_bin)
 # Identify any water bodies that aren't already in the list.
-new_wb_for_list = ang_s |> 
+new_wb_for_list = binned_ang |>
   dplyr::anti_join(
-    wb_list |> 
-      sf::st_drop_geometry() |> 
+    wb_list |>
+      sf::st_drop_geometry() |>
       dplyr::select(GNIS_NA, WATERSH)
-  ) |> 
+  ) |>
   dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_kmeans_bin)
 
-wb_already_in_list = ang_s |> 
-  dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
-  dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_kmeans_bin) |> 
+wb_already_in_list = binned_ang |>
+  dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |>
+  dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_kmeans_bin) |>
   sf::st_drop_geometry()
 
 # Not new waterbodies per list, per se, but new columns.
-wb_list = wb_list |> 
+wb_list = wb_list |>
   dplyr::left_join(
     wb_already_in_list
   )
 
 # Are there any new waterbodies to be added to the wb_list?
 if(nrow(new_wb_for_list) > 0){
-  wb_list = wb_list |> 
+  wb_list = wb_list |>
     dplyr::bind_rows(
       new_wb_for_list
     )
 }
-```
 
-### 2023-2024 iSEA Fishing Days
-```{r}
-dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rds"))
 
-# wbs present in both
-nrow(ang_s |> dplyr::filter(GNIS_NA %in% dfo_ang$waterbody))
-# wbs only in the 'old' angler survey data.
-nrow(ang_s |> dplyr::filter(!GNIS_NA %in% dfo_ang$waterbody))
-
-# If > 95% of the lakes in the old dataset are present in the new, no question to just move to the new dataset. Numbers are wildly different in scale, though the ordering might be kind of similar.
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
@@ -788,6 +840,16 @@ for (sp in species_names) {
   }
 }
 
+sara <-sf::st_read(paste0(onedrive_wd,"DFO_SARA/dfo_sara_occurrences_in_BC_no_marine.gpkg"))
+
+
+
+sara <- sf::st_transform(sara, st_crs(wb_list))
+wb_list$SARA<-NA
+
+test<-st_join(wb_list, sara)
+
+
 
 ```
 			
@@ -812,29 +874,32 @@ wb_list |>
   pageLength = 5, autoWidth = TRUE))
 ```
 
-### Final Table for Infected Watershed's Waterbodies
-
-```{r show_final_results_data_table}
-wb_list_in_wsg = wb_list |> 
-  sf::st_filter(adj_small_watersheds) |> 
-  sf::st_transform(4326)
-
-wb_list_in_wsg |> 
-  sf::st_drop_geometry() |> 
-  DT::datatable(filter = 'top', options = list(
-  pageLength = 5, autoWidth = TRUE))
+```{r}
+# ### Final Table for Infected Watershed's Waterbodies
+# 
+# ```{r show_final_results_data_table}
+# wb_list_in_wsg = wb_list |> 
+#   sf::st_filter(adj_small_watersheds) |> 
+#   sf::st_transform(4326)
+# 
+# wb_list_in_wsg |> 
+#   sf::st_drop_geometry() |> 
+#   DT::datatable(filter = 'top', options = list(
+#   pageLength = 5, autoWidth = TRUE))
+# ```
 ```
+
 
 ```{r write_out_results_to_excel_file}
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "wbs_with_data_all_BC")
-openxlsx::addWorksheet(my_wb, "wbs_with_data_inf_WS")
+# openxlsx::addWorksheet(my_wb, "wbs_with_data_inf_WS")
 openxlsx::writeData(my_wb, "wbs_with_data_all_BC", wb_list |> 
   sf::st_drop_geometry())
-openxlsx::writeData(my_wb, "wbs_with_data_inf_WS", wb_list_in_wsg |> 
-  sf::st_drop_geometry())
+# openxlsx::writeData(my_wb, "wbs_with_data_inf_WS", wb_list_in_wsg |> 
+#   sf::st_drop_geometry())
 openxlsx::setColWidths(my_wb, "wbs_with_data_all_BC", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
-openxlsx::setColWidths(my_wb, "wbs_with_data_inf_WS", cols = c(1:(ncol(wb_list_in_wsg)-1)), widths = 'auto')
+# openxlsx::setColWidths(my_wb, "wbs_with_data_inf_WS", cols = c(1:(ncol(wb_list_in_wsg)-1)), widths = 'auto')
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
