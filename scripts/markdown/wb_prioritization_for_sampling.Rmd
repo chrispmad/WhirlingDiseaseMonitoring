@@ -9,7 +9,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F, warning = F, message = F)
 library(tidyverse)
@@ -57,6 +56,11 @@ if(!file.exists('data/anger_survey.rds')){
 } else {
   ang = readRDS('data/anger_survey.rds')
 }
+
+# Which waterbodies were sampled last year?
+wbs_sampled_2024 = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx")) |> 
+  purrr::set_names(snakecase::to_snake_case) |> 
+  dplyr::filter(sampled_in_2024_y_n == 'Y')
 ```
 
 ## Initial Waterbody list {.tabset}
@@ -153,7 +157,6 @@ if(nrow(new_wb_for_list) > 0){
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
-
 ```{r}
 # ### Freshwater Fisheries Society Angler Survey (2022-2023)
 # 
@@ -219,6 +222,7 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 ```
 
 ### 2023-2024 iSEA Fishing Days
+
 ```{r}
 dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rds"))
 # 
@@ -238,7 +242,7 @@ if(!interactive()){
   scale_fill_brewer(palette = 'Spectral', direction = -1) +
   scale_color_brewer(palette = 'Spectral', direction = -1) +
   ggthemes::theme_map() +
-  bin_info_labs(bin_vals)
+  bin_info_labs(bin_vals,'Fishing Days')
 }
 
  binned_ang<-st_transform(binned_ang, st_crs(wb_list))
@@ -375,6 +379,7 @@ wb_list = wb_list |>
 ```
 
 ### Connectivity of Infected Watersheds {.tabset}
+
 ```{r}
 if(!file.exists("data/named_watersheds_of_bc.rds")){
   # small_watersheds = bcdc_query_geodata('freshwater-atlas-named-watersheds') |> 
@@ -411,6 +416,7 @@ infected_rivers = bcdc_query_geodata('freshwater-atlas-rivers') |>
 The following tabs describe our analysis of infected watersheds and which neighbouring watersheds are downstream and hydrologically connected.
 
 #### Infected Watersheds and Rivers Therein
+
 ```{r show_infected_watersheds}
 if(!interactive()){
 ggplot() + 
@@ -430,6 +436,7 @@ adj_small_watersheds = small_watersheds |>
 ```
 
 #### Add Adjacent Watersheds
+
 ```{r show adjacent_small_watersheds}
 #### Infected Watersheds
 if(!interactive()){
@@ -465,6 +472,7 @@ ggplot() +
 ```
 
 #### Access elevation data
+
 ```{r establish_elevation_differences}
 
 elev = elevatr::get_elev_raster(locations = sf::st_bbox(wsg), z = 8)
@@ -535,6 +543,7 @@ infectable_adj_watersheds = small_watersheds_infected |>
 ```
 
 #### Infectable Downstream Watersheds
+
 ```{r}
 if(!interactive()){
 ggplot() + 
@@ -548,6 +557,7 @@ ggplot() +
 ```
 
 #### Add Lakes and Rivers
+
 ```{r}
 # Snag all rivers AND LAKES! in the adjacent watershed polygons
 rivers_in_infectable_adj_watersheds = bcdc_query_geodata('freshwater-atlas-rivers') |> 
@@ -578,6 +588,7 @@ ggplot() +
 ```
 
 #### Add Fish Passage Barriers (green) and Dams (brown)
+
 ```{r}
 # Query PSCIS for fish passage barriers.
 pscis_in_area = bcdc_query_geodata('pscis-assessments') |> 
@@ -608,12 +619,13 @@ ggplot() +
   geom_sf(data = infected_rivers, fill = 'darkblue', col = 'darkblue') + 
   geom_sf(data = pscis_in_area, col = 'green') +
   geom_sf(data = pscis_near_rivers, col = 'green') +
-  geom_sf(data = dams |> sf::st_buffer(dist = 100), col = 'brown') +
+  geom_sf(data = dams |> sf::st_buffer(dist = 1000), col = 'brown', fill = 'brown') +
   geom_sf(data = pos_fish_edna_sf_albers)
 }
 ```
 
 ### Downstream Infectable Waterbodies
+
 ```{r}
 downstream_infectable_waterbodies = rivers_in_infectable_adj_watersheds |> 
   dplyr::bind_rows(
@@ -648,29 +660,36 @@ wb_list = wb_list |>
 ```
 
 ### Water Authorizations
+
 ```{r snag_water_auths}
-water_apps = bcdc_query_geodata('water-approval-points') |> 
-  filter(INTERSECTS(wsg)) |> 
-  collect()
+if(!file.exists('data/water_authorization_points.rds')){
+  water_apps = bcdc_query_geodata('water-approval-points') |> 
+    # filter(INTERSECTS(wsg)) |> 
+    collect()
+  water_apps = sf::st_filter(water_apps, bcmaps::bc_bound())
+  saveRDS(water_apps,'data/water_authorization_points.rds')
+} else {
+  water_apps = readRDS('data/water_authorization_points.rds')
+}
 
 water_apps = water_apps |> 
   dplyr::mutate(approval_status = dplyr::case_when(
-    APPROVAL_STATUS %in% c("Abandoned","Aborted","Cancelled","Expired") ~ "Abandoned/Cancelled/Expired",
+    APPROVAL_STATUS %in% c("Abandoned","Aborted","Cancelled") ~ "Abandoned/Cancelled",
     T ~ APPROVAL_STATUS
   ))
 
 if(!interactive()){
-ggplot() + 
-  geom_sf(data = wsg, fill = 'white') + 
-  geom_sf(data = water_apps, aes(col = approval_status))
+  ggplot() + 
+    geom_sf(data = bcmaps::bc_bound()) + 
+    geom_sf(data = water_apps, aes(col = approval_status))
 }
 
 water_apps_w_wb_info = water_apps |> 
-  dplyr::filter(approval_status == 'Current') |>
+  dplyr::filter(approval_status %in% c('Current','Expired')) |>
   sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH))
 
 water_apps_w_wb_cumulative = water_apps |> 
-  dplyr::filter(approval_status == "Current" | approval_status == "Superseded")|>
+  dplyr::filter(approval_status %in% c("Current","Superseded",'Expired')) |>
   sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
   sf::st_drop_geometry() |> 
   dplyr::filter(!is.na(GNIS_NA)) |> 
@@ -680,11 +699,33 @@ water_apps_w_wb_cumulative = water_apps |>
 number_water_apps_per_wb = water_apps_w_wb_info |> 
   dplyr::filter(!is.na(GNIS_NA)) |> 
   sf::st_drop_geometry() |> 
-  dplyr::count(GNIS_NA,WATERSH, name = "active_water_authorizations")
+  dplyr::count(GNIS_NA,WATERSH, name = "active_and_expired_water_authorizations")
+
+
+# Bin!
+number_water_apps_per_wb = bin_to_kmeans(number_water_apps_per_wb, 'active_and_expired_water_authorizations', k_breaks)
+
+water_auths_bins = getKMeansBreaks(number_water_apps_per_wb$active_and_expired_water_authorizations, k = k_breaks)
+
+wbs_with_water_apps = wb_list |> 
+  dplyr::inner_join(
+    number_water_apps_per_wb
+  )
+
+if(!interactive()){
+ ggplot() + 
+  geom_sf(data = bcmaps::bc_bound()) +
+  geom_sf(data = wbs_with_water_apps, aes(col = active_and_expired_water_authorizations_kmeans_bin, fill = active_and_expired_water_authorizations_kmeans_bin)) +
+  scale_fill_brewer(palette = 'Spectral', direction = -1) +
+  scale_color_brewer(palette = 'Spectral', direction = -1) +
+  ggthemes::theme_map() +
+  bin_info_labs(water_auths_bins,"Water Auths")
+}
+
 
 wb_list = wb_list |> 
   dplyr::left_join(number_water_apps_per_wb) |> 
-  dplyr::mutate(active_water_authorizations = tidyr::replace_na(active_water_authorizations, 0))
+  dplyr::mutate(active_and_expired_water_authorizations = tidyr::replace_na(active_and_expired_water_authorizations, 0))
 ```
 
 If we only take Water Authorization points of status type 'Current' and drop all the rest, there are `r nrow(water_apps |> dplyr::filter(approval_status == 'Current'))` points to consider; `r nrow(water_apps_w_wb_info |> dplyr::filter(!is.na(GNIS_NA)))` of these overlap with one of the waterbodies with at least one watercraft inspection tied to it or at least one mention of it in the angler survey data.
@@ -782,11 +823,10 @@ wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suita
 
 ### Overlay Susceptible Species Occurrences
 
-viii. Overlay susceptible species occurrences (present/absent for each waterbody) and facet map by species at this stage; maybe later we'll remove WBs with 0. We could apply this
-			and show the effect of doing this.
+viii. Overlay susceptible species occurrences (present/absent for each waterbody) and facet map by species at this stage; maybe later we'll remove WBs with 0. We could apply this and show the effect of doing this.
 
 The species considered susceptible to whirling disease are:
-			
+
 ```{r overlay_susceptible_species}
 
 # Fish occurrence records queried from typical data sources.
@@ -795,16 +835,28 @@ library(bcinvadeR)
 bc<-bcmaps::bc_bound() |> 
   sf::st_transform(4326)
 
+# # Quick check - what are all of the different species in the known-bc-fish-occurrences layer that mention 'Whitefish' in the species name?
+# my_query = bcdata:::CQL("SPECIES_NAME like '%Whitefish'")
+# 
+# all_whitefish_recs = bcdc_query_geodata("aca81811-4b08-4382-9af7-204e0b9d2448") |> 
+#   filter(my_query) |> 
+#   collect()
+# 
+# all_whitefish_recs |> 
+#   sf::st_drop_geometry() |> 
+#   dplyr::count(SPECIES_NAME)
+# There are Broad, Giant Pygmy, Lake, ountain, Pygmy, and Round Whitefish.
+
 species_names <- c(
   "Bull Trout", "Sockeye Salmon", "Cutthroat Trout", "Coho Salmon",
   "Rainbow Trout", "Chinook Salmon", "Mountain Whitefish", 
   "Atlantic Salmon", "Brown Trout", "Brook Trout", "Westslope Cutthroat Trout",
-  "Steelhead Trout"
+  "Steelhead","Lake Whitefish","Round Whitefish","Pygmy Whitefish"
 )
 
 if(requery_occs){
   species_occs <- lapply(species_names, function(sp) {
-    ocs<-suppressMessages(suppressWarnings(grab_aq_occ_data(sp, quiet = TRUE)))
+    ocs<-try(suppressMessages(suppressWarnings(grab_aq_occ_data(sp, quiet = TRUE))))
     if (!is.null(ocs)) {
       outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
       sf::write_sf(ocs, outfile)
@@ -911,9 +963,27 @@ wb_list<-wb_with_sara_grouped
 rm(wb_with_sara_grouped, sara_sp, wb_with_sara)
 
 ```
-			
+
+```{r add_if_wb_was_sampled_in_2024}
+wb_sampled_2024 = wb_list |> 
+  sf::st_filter(
+    sf::st_as_sf(
+      wbs_sampled_2024,
+      coords = c("long","lat"),
+      crs = 4326
+    ) |> sf::st_transform(3005)
+  ) |> 
+  dplyr::select(GNIS_NA, WATERSH) |> 
+  sf::st_drop_geometry() |> 
+  dplyr::mutate(sampled_2024 = TRUE)
+
+wb_list = wb_list |> 
+  dplyr::left_join(wb_sampled_2024) |> 
+  dplyr::mutate(sampled_2024 = tidyr::replace_na(sampled_2024, FALSE))
+```
+
 ix. Add in expert opinion from regions, First Nations, etc., as available
-x. In future, we'll bring in SARA-listed species / COSEWIC
+x.  In future, we'll bring in SARA-listed species / COSEWIC
 
 ```{r add_together_variables}
 wb_list = wb_list |> 
@@ -926,15 +996,20 @@ wb_list = wb_list |>
 
 ### Table of All Waterbodies with Data
 
+Priority Equation:
+
+$$
+P_w = IEBC_w + IIBC_w + DF_w + WA_w
+$$
+
+Where *P~w~* is the priority ranking of a given waterbody, IEBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, IIBC is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, DF~w~ is the binned fishing days reported for a given waterbody, and WA~w~ is the binned number of current or expired water authorization points within a given waterbody.
+
 ```{r show_results_data_table}
 wb_list |> 
   sf::st_drop_geometry() |> 
   DT::datatable(filter = 'top', options = list(
   pageLength = 5, autoWidth = TRUE))
 ```
-
-
-
 
 ```{r}
 ### Final Table for Infected Watershed's Waterbodies
@@ -952,8 +1027,6 @@ wb_list |>
 
 ```
 
-
-
 ```{r write_out_results_to_excel_file}
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "wbs_with_data_all_BC")
@@ -967,7 +1040,6 @@ openxlsx::setColWidths(my_wb, "wbs_with_data_all_BC", cols = c(1:(ncol(wb_list)-
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
-
 ### Leaflet Map - Provincial Risk
 
 ```{r fig.width = 9, fig.height = 6}
@@ -980,8 +1052,6 @@ wb_list<-st_transform(wb_list, 4326)
 wb_list <- wb_list |> filter(priority > 3)
 
 priority_vals <- sort(unique(wb_list$priority))
-
-
 
 m <- leaflet() |>
   addTiles(group = 'openStreetMap') |>
@@ -1021,10 +1091,21 @@ m <- m |> addLegend(
   position = "bottomright"
 )
 
+# Add reset map button
+m 
+
+m |> 
+  leaflet.extras::addResetMapButton() |> 
+  leaflet.extras::addSearchFeatures(
+    targetGroups = c(paste0("Priority ",priority_vals)),
+    options = leaflet.extras::searchFeaturesOptions(
+      zoom=8, openPopup = TRUE, firstTipSubmit = TRUE,
+      autoCollapse = F, hideMarkerOnCollapse = TRUE,
+    ))
+
 m
 
 ```
-
 
 ```{r}
 # 
@@ -1148,9 +1229,3 @@ m
 #             title = 'Priority',
 #             labFormat = labelFormat(transform = function(x) sort(x, decreasing = F)))
 ```
-
-
-
-```
-
-
