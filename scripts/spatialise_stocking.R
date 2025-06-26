@@ -13,6 +13,11 @@ dat2024<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2024.csv"))
 dat2023<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2023.csv"))
 dat2022<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2022.csv"))
 
+dat2022 <- dat2022 |>  mutate(Year = 2022)
+dat2023 <- dat2023 |>  mutate(Year = 2023)
+dat2024 <- dat2024 |>  mutate(Year = 2024)
+
+all_years <- bind_rows(dat2022, dat2023, dat2024)
 
 named_lakes<-bcdc_query_geodata('freshwater-atlas-lakes') |> 
   dplyr::filter(!is.na(GNIS_NAME_1)) |> 
@@ -20,7 +25,7 @@ named_lakes<-bcdc_query_geodata('freshwater-atlas-lakes') |>
   dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
   dplyr::summarise()
 
-towns<- dat2024 |> 
+towns<- all_years |> 
   dplyr::select(Nearest.Town) |> 
   distinct() |> 
   mutate(Nearest.Town = str_trim(Nearest.Town)) |> 
@@ -41,7 +46,7 @@ geocoded_sf <- st_as_sf(geocoded[!is.na(geocoded$latitude),], coords = c("longit
 #   geom_sf(data = geocoded_sf)
 
 # buffer
-dat2024_geo <- dat2024 |> 
+dat2024_geo <- all_years |> 
   left_join(geocoded, by = "Nearest.Town")
 
 data2024_sp<-st_as_sf(dat2024_geo[!is.na(dat2024_geo$latitude),], coords = c("longitude", "latitude"), crs = 4326)
