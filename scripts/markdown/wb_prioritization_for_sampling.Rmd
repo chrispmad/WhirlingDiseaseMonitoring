@@ -798,7 +798,8 @@ bc<-bcmaps::bc_bound() |>
 species_names <- c(
   "Bull Trout", "Sockeye Salmon", "Cutthroat Trout", "Coho Salmon",
   "Rainbow Trout", "Chinook Salmon", "Mountain Whitefish", 
-  "Atlantic Salmon", "Brown Trout", "Brook Trout"
+  "Atlantic Salmon", "Brown Trout", "Brook Trout", "Westslope Cutthroat Trout",
+  "Steelhead Trout"
 )
 
 if(requery_occs){
@@ -933,17 +934,22 @@ wb_list |>
 ```
 
 
+
+
+```{r}
 ### Final Table for Infected Watershed's Waterbodies
 
-```{r show_final_results_data_table}
-wb_list_in_wsg = wb_list |>
-  sf::st_filter(adj_small_watersheds) |>
-  sf::st_transform(4326)
+# ```{r show_final_results_data_table}
+# wb_list_in_wsg = wb_list |>
+#   sf::st_filter(adj_small_watersheds) |>
+#   sf::st_transform(4326)
+# 
+# wb_list_in_wsg |>
+#   sf::st_drop_geometry() |>
+#   DT::datatable(filter = 'top', options = list(
+#   pageLength = 5, autoWidth = TRUE))
+# ```
 
-wb_list_in_wsg |>
-  sf::st_drop_geometry() |>
-  DT::datatable(filter = 'top', options = list(
-  pageLength = 5, autoWidth = TRUE))
 ```
 
 
@@ -970,7 +976,12 @@ library(leaflet)
 priority_pal = colorNumeric("viridis", domain = wb_list$priority)
 wb_list$priority = as.numeric(wb_list$priority) 
 wb_list<-st_transform(wb_list, 4326)
+
+wb_list <- wb_list |> filter(priority > 3)
+
 priority_vals <- sort(unique(wb_list$priority))
+
+
 
 m <- leaflet() |>
   addTiles(group = 'openStreetMap') |>
@@ -990,10 +1001,11 @@ for (p in priority_vals) {
     group = paste0("Priority ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |> 
-        select(GNIS_NA, Fish_present, sara, priority)
+        select(GNIS_NA, Fish_present, sara, TotalInspections_kmeans_bin, insp_from_wd_bc_wb_kmeans_bin, days_fished_kmeans_bin, priority)
     )
   )
 }
+
 
 # Add layer controls to toggle each priority level
 m <- m |> addLayersControl(
@@ -1014,126 +1026,131 @@ m
 ```
 
 
+```{r}
+# 
+# ### Leaflet Map - South East
+# ```{r fig.width = 9, fig.height = 6}
+# 
+# 
+# add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
+#   if(!is.na(labelcol)){
+#     l = l |> 
+#       addPolygons(
+#       data = dat |> sf::st_transform(4326),
+#       fillColor = fillcolor,
+#       color = 'black',
+#       weight = 1.5,
+#       label = dat[[labelcol]],
+#       fillOpacity = 0.8,
+#       group = groupname,
+#       options = pathOptions(pane = pane_name)
+#     )
+#   } else {
+#     l = l |> 
+#       addPolygons(
+#       data = dat |> sf::st_transform(4326),
+#       fillColor = fillcolor,
+#       color = 'black',
+#       weight = 1.5,
+#       fillOpacity = 0.8,
+#       group = groupname,
+#       options = pathOptions(pane = pane_name)
+#     )
+#   }
+#   l
+# }
+# 
+# priority_pal = leaflet::colorNumeric(palette = 'Spectral',
+#                                      domain = wb_list_in_wsg$priority,
+#                                      reverse = T)
+# leaflet() |> 
+#   addTiles(group = 'openStreetMap') |> 
+#   addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
+#   addLayersControl(
+#     position = 'bottomleft',
+#     baseGroups = c("cartoDB","openStreetMap"),
+#     overlayGroups = c("adjacent",#"infectable",
+#                       "infected",
+#                       'infectable wbs','PSCIS','dams',
+#                       'positive fish samples','wb_list'),
+#     options = layersControlOptions(collapsed = F)) |> 
+#   addMapPane("wsg_p", zIndex = 200) |> 
+#   addMapPane("adjacent_p", zIndex = 210) |> 
+#   addMapPane("infectable_p", zIndex = 250) |> 
+#   addMapPane("infected_p", zIndex = 300) |> 
+#   addMapPane("infectable_wbs_p", zIndex = 400) |>
+#   addMapPane("PSCIS_and_dams_p", zIndex = 500) |> 
+#   addMapPane("pos_fish_p", zIndex = 600) |> 
+#   addMapPane("wb_list", zIndex = 650) |>
+#   add_my_poly(wsg, 'white', groupname = 'goop', pane_name = 'wsg_p') |>
+#   add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |>
+#   add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |>
+#   add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |>
+#   add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |>
+#   addCircleMarkers(
+#     data = dplyr::bind_rows(
+#       pscis_in_area,
+#       pscis_near_rivers
+#     ) |> sf::st_transform(4326),
+#     color = 'green',
+#     radius = 1,
+#     fillOpacity = 0.8,
+#     opacity = 0.8,
+#     label = ~CROSSING_TYPE_DESC,
+#     group = 'PSCIS',
+#     options = pathOptions(pane = 'PSCIS_and_dams_p')
+#   ) |>
+#   addPolygons(
+#     data = dams |> sf::st_transform(4326),
+#     color = 'brown',
+#     fillOpacity = 0.8,
+#     opacity = 0.8,
+#     label = ~DAM_NAME,
+#     popup = lapply(leafpop::popupTable(dams |>
+#                                   sf::st_drop_geometry() |>
+#                                   dplyr::select(DAM_NAME,DAM_TYPE,
+#                                                 DAM_HEIGHT,CREST_LENGTH)),
+#                    htmltools::HTML),
+#     group = 'dams',
+#     options = pathOptions(pane = 'PSCIS_and_dams_p')
+#   ) |>
+#    addCircleMarkers(
+#     data = pos_fish_edna_sf,
+#     color = 'black',
+#     fillColor = '#00e7cf',
+#     radius = 6,
+#     weight = 0.5,
+#     fillOpacity = 0.8,
+#     opacity = 0.8,
+#     label = ~paste0("Positive fish sample at ",sample_site_name),
+#     group = 'positive fish samples',
+#     options = pathOptions(pane = 'pos_fish_p')
+#   ) |> 
+#   addPolygons(
+#     data = wb_list_in_wsg,
+#     label = ~paste0(GNIS_NA," (waterbody with data)"),
+#     popup = lapply(
+#       leafpop::popupTable(
+#         wb_list_in_wsg |> sf::st_drop_geometry()
+#       ),
+#       htmltools::HTML
+#     ),
+#     fillColor = ~priority_pal(priority),
+#     color = ~priority_pal(priority),
+#     fillOpacity = 0.8,
+#     opacity = 0.8,
+#     group = 'wb_list',
+#     options = pathOptions(pane = 'wb_list')
+#   ) |>
+#   addLegend('topright', 
+#             pal = priority_pal, 
+#             values = unique(wb_list_in_wsg$priority),
+#             title = 'Priority',
+#             labFormat = labelFormat(transform = function(x) sort(x, decreasing = F)))
+```
 
-### Leaflet Map - South East
-```{r fig.width = 9, fig.height = 6}
 
 
-add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
-  if(!is.na(labelcol)){
-    l = l |> 
-      addPolygons(
-      data = dat |> sf::st_transform(4326),
-      fillColor = fillcolor,
-      color = 'black',
-      weight = 1.5,
-      label = dat[[labelcol]],
-      fillOpacity = 0.8,
-      group = groupname,
-      options = pathOptions(pane = pane_name)
-    )
-  } else {
-    l = l |> 
-      addPolygons(
-      data = dat |> sf::st_transform(4326),
-      fillColor = fillcolor,
-      color = 'black',
-      weight = 1.5,
-      fillOpacity = 0.8,
-      group = groupname,
-      options = pathOptions(pane = pane_name)
-    )
-  }
-  l
-}
-
-priority_pal = leaflet::colorNumeric(palette = 'Spectral',
-                                     domain = wb_list_in_wsg$priority,
-                                     reverse = T)
-leaflet() |> 
-  addTiles(group = 'openStreetMap') |> 
-  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
-  addLayersControl(
-    position = 'bottomleft',
-    baseGroups = c("cartoDB","openStreetMap"),
-    overlayGroups = c("adjacent",#"infectable",
-                      "infected",
-                      'infectable wbs','PSCIS','dams',
-                      'positive fish samples','wb_list'),
-    options = layersControlOptions(collapsed = F)) |> 
-  addMapPane("wsg_p", zIndex = 200) |> 
-  addMapPane("adjacent_p", zIndex = 210) |> 
-  addMapPane("infectable_p", zIndex = 250) |> 
-  addMapPane("infected_p", zIndex = 300) |> 
-  addMapPane("infectable_wbs_p", zIndex = 400) |>
-  addMapPane("PSCIS_and_dams_p", zIndex = 500) |> 
-  addMapPane("pos_fish_p", zIndex = 600) |> 
-  addMapPane("wb_list", zIndex = 650) |>
-  add_my_poly(wsg, 'white', groupname = 'goop', pane_name = 'wsg_p') |>
-  add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |>
-  add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |>
-  add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |>
-  add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |>
-  addCircleMarkers(
-    data = dplyr::bind_rows(
-      pscis_in_area,
-      pscis_near_rivers
-    ) |> sf::st_transform(4326),
-    color = 'green',
-    radius = 1,
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    label = ~CROSSING_TYPE_DESC,
-    group = 'PSCIS',
-    options = pathOptions(pane = 'PSCIS_and_dams_p')
-  ) |>
-  addPolygons(
-    data = dams |> sf::st_transform(4326),
-    color = 'brown',
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    label = ~DAM_NAME,
-    popup = lapply(leafpop::popupTable(dams |>
-                                  sf::st_drop_geometry() |>
-                                  dplyr::select(DAM_NAME,DAM_TYPE,
-                                                DAM_HEIGHT,CREST_LENGTH)),
-                   htmltools::HTML),
-    group = 'dams',
-    options = pathOptions(pane = 'PSCIS_and_dams_p')
-  ) |>
-   addCircleMarkers(
-    data = pos_fish_edna_sf,
-    color = 'black',
-    fillColor = '#00e7cf',
-    radius = 6,
-    weight = 0.5,
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    label = ~paste0("Positive fish sample at ",sample_site_name),
-    group = 'positive fish samples',
-    options = pathOptions(pane = 'pos_fish_p')
-  ) |> 
-  addPolygons(
-    data = wb_list_in_wsg,
-    label = ~paste0(GNIS_NA," (waterbody with data)"),
-    popup = lapply(
-      leafpop::popupTable(
-        wb_list_in_wsg |> sf::st_drop_geometry()
-      ),
-      htmltools::HTML
-    ),
-    fillColor = ~priority_pal(priority),
-    color = ~priority_pal(priority),
-    fillOpacity = 0.8,
-    opacity = 0.8,
-    group = 'wb_list',
-    options = pathOptions(pane = 'wb_list')
-  ) |>
-  addLegend('topright', 
-            pal = priority_pal, 
-            values = unique(wb_list_in_wsg$priority),
-            title = 'Priority',
-            labFormat = labelFormat(transform = function(x) sort(x, decreasing = F)))
 ```
 
 
