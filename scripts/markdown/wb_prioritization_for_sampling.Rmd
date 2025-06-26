@@ -1092,9 +1092,7 @@ m <- m |> addLegend(
 )
 
 # Add reset map button
-m 
-
-m |> 
+m = m |> 
   leaflet.extras::addResetMapButton() |> 
   leaflet.extras::addSearchFeatures(
     targetGroups = c(paste0("Priority ",priority_vals)),
