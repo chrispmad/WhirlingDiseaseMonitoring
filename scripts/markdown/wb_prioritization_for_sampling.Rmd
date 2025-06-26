@@ -3,15 +3,12 @@ title: "Prioritization of Water Bodies for Whirling Disease Sampling"
 author: "Chris Madsen & John Phelan"
 date: "`r Sys.Date()`"
 output: html_document
+  css: my_style.css
 editor_options: 
   chunk_output_type: console
 ---
 
-```{css, echo=FALSE}
-.leaflet-tooltip {
-  z-index: 1000 !important;
-}
-```
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = F, warning = F, message = F)
@@ -672,6 +669,14 @@ water_apps_w_wb_info = water_apps |>
   dplyr::filter(approval_status == 'Current') |>
   sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH))
 
+water_apps_w_wb_cumulative = water_apps |> 
+  dplyr::filter(approval_status == "Current" | approval_status == "Superseded")|>
+  sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
+  sf::st_drop_geometry() |> 
+  dplyr::filter(!is.na(GNIS_NA)) |> 
+  dplyr::count(GNIS_NA,WATERSH, name = "cumulative_authorizations")
+  
+
 number_water_apps_per_wb = water_apps_w_wb_info |> 
   dplyr::filter(!is.na(GNIS_NA)) |> 
   sf::st_drop_geometry() |> 
@@ -882,14 +887,27 @@ for (sp in species_names) {
 
 # The above looks perfect!
 
-sara <-sf::st_read(paste0(onedrive_wd,"DFO_SARA/dfo_sara_occurrences_in_BC_no_marine.gpkg"))
+# get the sara listed species in each of the listed waterbodies
 
-sara <- sf::st_transform(sara, st_crs(wb_list))
-wb_list$SARA<-NA
+sara_sp<-sf::read_sf(paste0(onedrive_wd,"DFO_SARA/dfo_sara_occurrences_in_BC_no_marine.gpkg"))
 
-test<-st_join(wb_list, sara)
+sara_sp <- sf::st_transform(sara_sp, st_crs(wb_list))
 
+# Perform spatial join: match SARA species polygons to waterbodies
+wb_with_sara <- st_join(wb_list, sara_sp |> select(Common_Name_EN), left = TRUE)
 
+# Create or update a `sara` column: list of overlapping species names
+wb_with_sara_grouped <- wb_with_sara |>
+  group_by(across(all_of(names(wb_list)))) |>  # Group by original wb_list columns
+  summarise(sara = paste(unique(Common_Name_EN[!is.na(Common_Name_EN)]), collapse = "; "),
+            .groups = "drop")
+
+# Replace empty strings with NA (no SARA species overlap)
+wb_with_sara_grouped <- wb_with_sara_grouped |>
+  mutate(sara = na_if(trimws(sara), ""))
+
+wb_list<-wb_with_sara_grouped
+rm(wb_with_sara_grouped, sara_sp, wb_with_sara)
 
 ```
 			
@@ -914,20 +932,20 @@ wb_list |>
   pageLength = 5, autoWidth = TRUE))
 ```
 
-```{r}
-# ### Final Table for Infected Watershed's Waterbodies
-# 
-# ```{r show_final_results_data_table}
-# wb_list_in_wsg = wb_list |> 
-#   sf::st_filter(adj_small_watersheds) |> 
-#   sf::st_transform(4326)
-# 
-# wb_list_in_wsg |> 
-#   sf::st_drop_geometry() |> 
-#   DT::datatable(filter = 'top', options = list(
-#   pageLength = 5, autoWidth = TRUE))
-# ```
+
+### Final Table for Infected Watershed's Waterbodies
+
+```{r show_final_results_data_table}
+wb_list_in_wsg = wb_list |>
+  sf::st_filter(adj_small_watersheds) |>
+  sf::st_transform(4326)
+
+wb_list_in_wsg |>
+  sf::st_drop_geometry() |>
+  DT::datatable(filter = 'top', options = list(
+  pageLength = 5, autoWidth = TRUE))
 ```
+
 
 
 ```{r write_out_results_to_excel_file}
@@ -943,9 +961,38 @@ openxlsx::setColWidths(my_wb, "wbs_with_data_all_BC", cols = c(1:(ncol(wb_list)-
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
-### Leaflet Map
+
+### Leaflet Map - Provincial Risk
 ```{r fig.width = 9, fig.height = 6}
 library(leaflet)
+
+priority_pal = colorNumeric("viridis", domain = wb_list$priority)
+wb_list$priority = as.numeric(wb_list$priority) 
+wb_list<-st_transform(wb_list, 4326)
+
+leaflet() |> 
+  addTiles(group = 'openStreetMap') |> 
+  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
+  addPolygons(
+    data = wb_list,
+    label = ~paste0(GNIS_NA, " (waterbody with data)"),
+    fillColor = ~priority_pal(priority),
+    fillOpacity = 0.8,
+    color = "#333333",
+    weight = 1,
+    popup = leafpop::popupTable(
+      wb_list |> st_drop_geometry() |> 
+        select(GNIS_NA, Fish_present, sara, priority)
+    )
+  )
+
+```
+
+
+
+### Leaflet Map - South East
+```{r fig.width = 9, fig.height = 6}
+
 
 add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
   if(!is.na(labelcol)){
@@ -1063,3 +1110,5 @@ leaflet() |>
             title = 'Priority',
             labFormat = labelFormat(transform = function(x) sort(x, decreasing = F)))
 ```
+
+
