@@ -952,7 +952,7 @@ species_names <- c(
 
 if(requery_occs){
   species_occs <- lapply(species_names, function(sp) {
-    ocs<-try(suppressMessages(suppressWarnings(grab_aq_occ_data(sp, quiet = TRUE))))
+    ocs<-try(suppressMessages(suppressWarnings(grab_aq_occ_data(sp, quiet = TRUE, sources = c("FDIS","Old Aquatic","iNaturalist")))))
     if (!is.null(ocs)) {
       outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
       sf::write_sf(ocs, outfile)
@@ -1134,9 +1134,10 @@ x.  In future, we'll bring in SARA-listed species / COSEWIC
 wb_list = wb_list |> 
   dplyr::mutate(tib = as.numeric(TotalInspections_kmeans_bin),
                 iwbc = as.numeric(insp_from_wd_bc_wb_kmeans_bin),
-                dfb = as.numeric(days_fished_kmeans_bin)) |> 
-  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb)) |> 
-  dplyr::select(-c(tib,iwbc,dfb))
+                dfb = as.numeric(days_fished_kmeans_bin),
+                wab = as.numeric(active_water_authorizations_kmeans_bin)) |> 
+  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,tib)) |> 
+  dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
 ### Table of All Waterbodies with Data
