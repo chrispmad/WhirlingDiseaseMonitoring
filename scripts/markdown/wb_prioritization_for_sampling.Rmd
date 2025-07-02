@@ -923,7 +923,7 @@ viii. Overlay susceptible species occurrences (present/absent for each waterbody
 
 The species considered susceptible to whirling disease are:
 
-```{r overlay_susceptible_species}
+```{r overlay_susceptible_species, fig.width = 8, fig.height = 6}
 
 # Fish occurrence records queried from typical data sources.
 library(bcinvadeR)
@@ -1134,9 +1134,10 @@ x.  In future, we'll bring in SARA-listed species / COSEWIC
 wb_list = wb_list |> 
   dplyr::mutate(tib = as.numeric(TotalInspections_kmeans_bin),
                 iwbc = as.numeric(insp_from_wd_bc_wb_kmeans_bin),
-                dfb = as.numeric(days_fished_kmeans_bin)) |> 
-  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb)) |> 
-  dplyr::select(-c(tib,iwbc,dfb))
+                dfb = as.numeric(days_fished_kmeans_bin),
+                wab = as.numeric(active_water_authorizations_kmeans_bin)) |> 
+  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,tib)) |> 
+  dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
 ### Table of All Waterbodies with Data
@@ -1144,10 +1145,15 @@ wb_list = wb_list |>
 Priority Equation:
 
 $$
-P_w = IEBC_w + IIBC_w + DF_w + WA_w
+P_w = EnteringBC_w + InsideBC_w + FishingDays_w + WaterAuths_w
 $$
 
-Where *P~w~* is the priority ranking of a given waterbody, IEBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, IIBC is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, DF~w~ is the binned fishing days reported for a given waterbody, and WA~w~ is the binned number of current or expired water authorization points within a given waterbody.
+Where *P~w~* is the priority ranking of a given waterbody, EnteringBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, InsideBC~w~ is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, Fishingdays~w~ is the binned fishing days reported for a given waterbody, and WaterAuths~w~ is the binned number of current water authorization points within a given waterbody.
+
+```{r reorder_final_columns}
+wb_list = wb_list |> 
+  dplyr::select(GNIS_NA:days_fished_kmeans_bin,fish_edna_positive_in_watershed:active_water_authorizations,active_water_authorizations_kmeans_bin:tubifex_habitat_suitability,known_fish,sus_spp:priority)
+```
 
 ```{r show_results_data_table}
 wb_list |> 
