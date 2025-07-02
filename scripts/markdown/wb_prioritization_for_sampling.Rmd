@@ -589,16 +589,17 @@ infectable_adj_watersheds = small_watersheds_infected |>
     small_ws_adj_to_x = small_ws_adj_to_x |> 
       sf::st_filter(rivers_in_x)
     
-    # filter adjacent watersheds such that they are lower in mean elevation 
-    # than the infected watershed.
-    cutoff_elev = adj_small_watersheds |> 
-      dplyr::filter(GAZETTED_NAME == .x$GAZETTED_NAME) |> 
-      dplyr::pull(mean_elev)
-    
-    infectable_small_watersheds = small_ws_adj_to_x |> 
-      dplyr::filter(mean_elev <= cutoff_elev)
-    
-    infectable_small_watersheds
+    small_ws_adj_to_x
+    # # filter adjacent watersheds such that they are lower in mean elevation 
+    # # than the infected watershed.
+    # cutoff_elev = adj_small_watersheds |> 
+    #   dplyr::filter(GAZETTED_NAME == .x$GAZETTED_NAME) |> 
+    #   dplyr::pull(mean_elev)
+    # 
+    # infectable_small_watersheds = small_ws_adj_to_x |> 
+    #   dplyr::filter(mean_elev <= cutoff_elev)
+    # 
+    # infectable_small_watersheds
   }) |> 
   dplyr::bind_rows() |> 
   dplyr::filter(!duplicated(GAZETTED_NAME))
@@ -1152,7 +1153,21 @@ Where *P~w~* is the priority ranking of a given waterbody, EnteringBC~w~ is the 
 
 ```{r reorder_final_columns}
 wb_list = wb_list |> 
-  dplyr::select(GNIS_NA:days_fished_kmeans_bin,fish_edna_positive_in_watershed:active_water_authorizations,active_water_authorizations_kmeans_bin:tubifex_habitat_suitability,known_fish,sus_spp:priority)
+  dplyr::rename(boats_entering_BC = TotalInspections,
+                boats_entering_BC_bin = TotalInspections_kmeans_bin,
+                boats_inside_BC = insp_from_wd_bc_wb,
+                boats_inside_BC_bin = insp_from_wd_bc_wb_kmeans_bin,
+                days_fished_bin = days_fished_kmeans_bin,
+                active_water_auths = active_water_authorizations,
+                active_water_auths_bin = active_water_authorizations_kmeans_bin,
+                susceptible_spp = sus_spp,
+                SARA = sara,
+                known_fish_occs = known_fish
+                ) |> 
+  dplyr::select(GNIS_NA:days_fished_bin,
+                active_water_auths,active_water_auths_bin,
+                priority,
+                fish_edna_positive_in_watershed:infectable,tubifex_edna_positive_in_watershed:SARA)
 ```
 
 ```{r show_results_data_table}
@@ -1162,32 +1177,22 @@ wb_list |>
   pageLength = 10, autoWidth = TRUE))
 ```
 
-```{r}
-### Final Table for Infected Watershed's Waterbodies
-
-# ```{r show_final_results_data_table}
-# wb_list_in_wsg = wb_list |>
-#   sf::st_filter(adj_small_watersheds) |>
-#   sf::st_transform(4326)
-# 
-# wb_list_in_wsg |>
-#   sf::st_drop_geometry() |>
-#   DT::datatable(filter = 'top', options = list(
-#   pageLength = 5, autoWidth = TRUE))
-# ```
-
+```{r make_list_filtered_for_SARA_overlaps}
+wb_list_SARA = wb_list |> 
+  dplyr::filter(!is.na(SARA))
 ```
+
 
 ```{r write_out_results_to_excel_file}
 my_wb = openxlsx::createWorkbook()
-openxlsx::addWorksheet(my_wb, "wbs_with_data_all_BC")
-# openxlsx::addWorksheet(my_wb, "wbs_with_data_inf_WS")
-openxlsx::writeData(my_wb, "wbs_with_data_all_BC", wb_list |> 
+openxlsx::addWorksheet(my_wb, "All Waterbodies")
+openxlsx::addWorksheet(my_wb, "SARA Overlaps")
+openxlsx::writeData(my_wb, "All Waterbodies", wb_list |> 
   sf::st_drop_geometry())
-# openxlsx::writeData(my_wb, "wbs_with_data_inf_WS", wb_list_in_wsg |> 
-#   sf::st_drop_geometry())
-openxlsx::setColWidths(my_wb, "wbs_with_data_all_BC", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
-# openxlsx::setColWidths(my_wb, "wbs_with_data_inf_WS", cols = c(1:(ncol(wb_list_in_wsg)-1)), widths = 'auto')
+openxlsx::writeData(my_wb, "SARA Overlaps", wb_list_SARA |>
+  sf::st_drop_geometry())
+openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
+openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
@@ -1200,9 +1205,9 @@ priority_pal = colorNumeric("viridis", domain = wb_list$priority)
 wb_list$priority = as.numeric(wb_list$priority) 
 wb_list<-st_transform(wb_list, 4326)
 
-wb_list <- wb_list |> filter(priority > 3)
+wb_list_SARAver_3 <- wb_list |> filter(priority > 3)
 
-priority_vals <- sort(unique(wb_list$priority))
+priority_vals <- sort(unique(wb_list_SARAver_3$priority))
 
 m <- leaflet() |>
   addTiles(group = 'openStreetMap') |>
@@ -1210,7 +1215,7 @@ m <- leaflet() |>
 
 # Add a polygon layer for each priority value
 for (p in priority_vals) {
-  wb_subset <- wb_list |> filter(priority == p)
+  wb_subset <- wb_list_SARAver_3 |> filter(priority == p)
 
   m <- m |> addPolygons(
     data = wb_subset,
@@ -1230,6 +1235,7 @@ for (p in priority_vals) {
 
 # Add layer controls to toggle each priority level
 m <- m |> addLayersControl(
+  position = 'bottomleft',
   overlayGroups = paste0("Priority ", priority_vals),
   options = layersControlOptions(collapsed = FALSE)
 )
@@ -1239,7 +1245,7 @@ m <- m |> addLegend(
   pal = priority_pal,
   values = wb_list$priority,
   title = "Priority",
-  position = "bottomright"
+  position = "topright"
 )
 
 # Add reset map button
@@ -1256,125 +1262,62 @@ m
 
 ```
 
+### Priority Waterbodies with SARA Overlaps
 ```{r}
-# 
-# ### Leaflet Map - South East
-# ```{r fig.width = 9, fig.height = 6}
-# 
-# 
-# add_my_poly = function(l, dat, fillcolor, groupname, pane_name, labelcol = NA){
-#   if(!is.na(labelcol)){
-#     l = l |> 
-#       addPolygons(
-#       data = dat |> sf::st_transform(4326),
-#       fillColor = fillcolor,
-#       color = 'black',
-#       weight = 1.5,
-#       label = dat[[labelcol]],
-#       fillOpacity = 0.8,
-#       group = groupname,
-#       options = pathOptions(pane = pane_name)
-#     )
-#   } else {
-#     l = l |> 
-#       addPolygons(
-#       data = dat |> sf::st_transform(4326),
-#       fillColor = fillcolor,
-#       color = 'black',
-#       weight = 1.5,
-#       fillOpacity = 0.8,
-#       group = groupname,
-#       options = pathOptions(pane = pane_name)
-#     )
-#   }
-#   l
-# }
-# 
-# priority_pal = leaflet::colorNumeric(palette = 'Spectral',
-#                                      domain = wb_list_in_wsg$priority,
-#                                      reverse = T)
-# leaflet() |> 
-#   addTiles(group = 'openStreetMap') |> 
-#   addProviderTiles(provider = providers$CartoDB, group = 'cartoDB') |> 
-#   addLayersControl(
-#     position = 'bottomleft',
-#     baseGroups = c("cartoDB","openStreetMap"),
-#     overlayGroups = c("adjacent",#"infectable",
-#                       "infected",
-#                       'infectable wbs','PSCIS','dams',
-#                       'positive fish samples','wb_list'),
-#     options = layersControlOptions(collapsed = F)) |> 
-#   addMapPane("wsg_p", zIndex = 200) |> 
-#   addMapPane("adjacent_p", zIndex = 210) |> 
-#   addMapPane("infectable_p", zIndex = 250) |> 
-#   addMapPane("infected_p", zIndex = 300) |> 
-#   addMapPane("infectable_wbs_p", zIndex = 400) |>
-#   addMapPane("PSCIS_and_dams_p", zIndex = 500) |> 
-#   addMapPane("pos_fish_p", zIndex = 600) |> 
-#   addMapPane("wb_list", zIndex = 650) |>
-#   add_my_poly(wsg, 'white', groupname = 'goop', pane_name = 'wsg_p') |>
-#   add_my_poly(adj_small_watersheds, 'yellow', groupname = 'adjacent',labelcol = "GAZETTED_NAME", pane_name = 'adjacent_p') |>
-#   add_my_poly(infectable_adj_watersheds, 'orange', groupname = 'infectable',labelcol = "GAZETTED_NAME", pane_name = 'infectable_p') |>
-#   add_my_poly(small_watersheds_infected, 'red', groupname = 'infected', labelcol = "GAZETTED_NAME", pane_name = 'infected_p') |>
-#   add_my_poly(dplyr::bind_rows(rivers_in_infectable_adj_watersheds,lakes_in_infectable_adj_watersheds),'blue',groupname = 'infectable wbs',labelcol = "GNIS_NAME_1",pane_name = 'infectable_wbs_p') |>
-#   addCircleMarkers(
-#     data = dplyr::bind_rows(
-#       pscis_in_area,
-#       pscis_near_rivers
-#     ) |> sf::st_transform(4326),
-#     color = 'green',
-#     radius = 1,
-#     fillOpacity = 0.8,
-#     opacity = 0.8,
-#     label = ~CROSSING_TYPE_DESC,
-#     group = 'PSCIS',
-#     options = pathOptions(pane = 'PSCIS_and_dams_p')
-#   ) |>
-#   addPolygons(
-#     data = dams |> sf::st_transform(4326),
-#     color = 'brown',
-#     fillOpacity = 0.8,
-#     opacity = 0.8,
-#     label = ~DAM_NAME,
-#     popup = lapply(leafpop::popupTable(dams |>
-#                                   sf::st_drop_geometry() |>
-#                                   dplyr::select(DAM_NAME,DAM_TYPE,
-#                                                 DAM_HEIGHT,CREST_LENGTH)),
-#                    htmltools::HTML),
-#     group = 'dams',
-#     options = pathOptions(pane = 'PSCIS_and_dams_p')
-#   ) |>
-#    addCircleMarkers(
-#     data = pos_fish_edna_sf,
-#     color = 'black',
-#     fillColor = '#00e7cf',
-#     radius = 6,
-#     weight = 0.5,
-#     fillOpacity = 0.8,
-#     opacity = 0.8,
-#     label = ~paste0("Positive fish sample at ",sample_site_name),
-#     group = 'positive fish samples',
-#     options = pathOptions(pane = 'pos_fish_p')
-#   ) |> 
-#   addPolygons(
-#     data = wb_list_in_wsg,
-#     label = ~paste0(GNIS_NA," (waterbody with data)"),
-#     popup = lapply(
-#       leafpop::popupTable(
-#         wb_list_in_wsg |> sf::st_drop_geometry()
-#       ),
-#       htmltools::HTML
-#     ),
-#     fillColor = ~priority_pal(priority),
-#     color = ~priority_pal(priority),
-#     fillOpacity = 0.8,
-#     opacity = 0.8,
-#     group = 'wb_list',
-#     options = pathOptions(pane = 'wb_list')
-#   ) |>
-#   addLegend('topright', 
-#             pal = priority_pal, 
-#             values = unique(wb_list_in_wsg$priority),
-#             title = 'Priority',
-#             labFormat = labelFormat(transform = function(x) sort(x, decreasing = F)))
+
+priority_pal = colorNumeric("viridis", domain = wb_list_SARA$priority)
+
+priority_vals <- sort(unique(wb_list_SARA$priority))
+
+m <- leaflet() |>
+  addTiles(group = 'openStreetMap') |>
+  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB')
+
+# Add a polygon layer for each priority value
+for (p in priority_vals) {
+  wb_subset <- wb_list_SARA |> filter(priority == p)
+
+  m <- m |> addPolygons(
+    data = wb_subset,
+    label = ~paste0(GNIS_NA, " (priority ", priority, ")"),
+    fillColor = ~priority_pal(priority),
+    fillOpacity = 0.8,
+    color = "#333333",
+    weight = 1,
+    group = paste0("Priority ", p),
+    popup = leafpop::popupTable(
+      wb_subset |> st_drop_geometry() |> 
+        select(GNIS_NA, sus_spp, sara, stocked_species, known_fish, TotalInspections_kmeans_bin, insp_from_wd_bc_wb_kmeans_bin, days_fished_kmeans_bin, priority)
+    )
+  )
+}
+
+
+# Add layer controls to toggle each priority level
+m <- m |> addLayersControl(
+  position = 'bottomleft',
+  overlayGroups = paste0("Priority ", priority_vals),
+  options = layersControlOptions(collapsed = FALSE)
+)
+
+# Optionally add legend
+m <- m |> addLegend(
+  pal = priority_pal,
+  values = wb_list_SARA$priority,
+  title = "Priority",
+  position = "topright"
+)
+
+# Add reset map button
+m = m |> 
+  leaflet.extras::addResetMapButton() |> 
+  leaflet.extras::addSearchFeatures(
+    targetGroups = c(paste0("Priority ",priority_vals)),
+    options = leaflet.extras::searchFeaturesOptions(
+      zoom=8, openPopup = TRUE, firstTipSubmit = TRUE,
+      autoCollapse = F, hideMarkerOnCollapse = TRUE,
+    ))
+
+m
 ```
+
