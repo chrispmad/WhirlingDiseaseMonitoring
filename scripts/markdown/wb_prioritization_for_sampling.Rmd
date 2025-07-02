@@ -1227,7 +1227,7 @@ for (p in priority_vals) {
     group = paste0("Priority ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |> 
-        select(GNIS_NA, sus_spp, sara, stocked_species, known_fish, TotalInspections_kmeans_bin, insp_from_wd_bc_wb_kmeans_bin, days_fished_kmeans_bin, priority)
+        select(GNIS_NA, susceptible_spp, sara, stocked_species, known_fish, TotalInspections_kmeans_bin, insp_from_wd_bc_wb_kmeans_bin, days_fished_kmeans_bin, priority)
     )
   )
 }
@@ -1287,7 +1287,7 @@ for (p in priority_vals) {
     group = paste0("Priority ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |> 
-        select(GNIS_NA, sus_spp, sara, stocked_species, known_fish, TotalInspections_kmeans_bin, insp_from_wd_bc_wb_kmeans_bin, days_fished_kmeans_bin, priority)
+        select(GNIS_NA, susceptible_spp, sara, stocked_species, known_fish, TotalInspections_kmeans_bin, insp_from_wd_bc_wb_kmeans_bin, days_fished_kmeans_bin, priority)
     )
   )
 }
