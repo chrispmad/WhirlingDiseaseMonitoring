@@ -957,7 +957,9 @@ ggplot() +
   geom_sf(data = bcmaps::bc_bound()) + 
   geom_sf(data = mines)
 
-DT::datatable(mines |> sf::st_drop_geometry() |> dplyr::slice(1:10))
+DT::datatable(mines |> sf::st_drop_geometry() |> 
+                dplyr::slice(1:10) |> dplyr::select(-TENURE_NUMBER)
+                )
 
 mines_nearby = mines |> 
   sf::st_buffer(dist = 5000) |> 
@@ -990,7 +992,9 @@ ggplot() +
   geom_sf(data = bcmaps::bc_bound()) + 
   geom_sf(data = reccies)
 
-DT::datatable(reccies |> sf::st_drop_geometry() |> dplyr::slice(1:10))
+DT::datatable(reccies |> sf::st_drop_geometry() |> 
+                dplyr::slice(1:10) |> dplyr::select(-c(DRIVING_DIRECTIONS,
+                                                      SITE_DESCRIPTION)))
 
 reccies_nearby = reccies |> 
   sf::st_buffer(dist = 500) |> 
@@ -1019,7 +1023,8 @@ if(!file.exists("data/parks_prot_areas_bcdata_layer.rds")){
 
 parks |> 
   sf::st_drop_geometry() |> 
-  dplyr::count(PROTECTED_AREA_TYPE, sort = T)
+  dplyr::count(PROTECTED_AREA_TYPE, sort = T) |> 
+  knitr::kable()
 
 ggplot() +
   geom_sf(data = bcmaps::bc_bound()) + 
@@ -1031,10 +1036,10 @@ parks_nearby = parks |>
   sf::st_buffer(dist = 500) |> 
   sf::st_join(wb_list |> dplyr::select(GNIS_NA, WATERSH)) |> 
   sf::st_drop_geometry() |> 
-  dplyr::count(GNIS_NA, WATERSH, name = "parks_nearby")
+  dplyr::count(GNIS_NA, WATERSH, name = "parks_prot_areas_nearby")
 
 wb_list = wb_list |> 
-  dplyr::left_join(reccies_nearby)
+  dplyr::left_join(parks_nearby)
 
 ```
 
