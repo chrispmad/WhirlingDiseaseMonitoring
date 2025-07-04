@@ -935,6 +935,8 @@ wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suita
 Current method: count number of mining sites within 5km of each waterbody.
 
 ```{r mines_across_BC, fig.width = 9, fig.height = 6}
+
+bcl = bcdata::bcdc_list()
 if(!file.exists("data/mining_bcdata_layer.rds")){
   mining = bcl[str_detect(bcl,"mine-")]
   
@@ -1043,6 +1045,21 @@ We queried the Environmental Monitoring System database for records mentioning t
 ![](images/EMS_mine_mills_dissolved_oxygen_data.jpg)
 
 ![](images/EMS_mine_mills_phosphorous_data.jpg)
+
+### Waterbody temperatures
+
+Whirling disease host production is maximised between 10 and 17 degrees.
+
+```{r wb_temperature}
+
+# We have 3 sources of water temperature - hydroclim data, EMS data, and Aquarius
+# hydroclim only does the southern part of the province. Lets start with EMS and see what we can match
+
+
+
+```
+
+
 
 ### Susceptible Species Occurrences
 
@@ -1265,6 +1282,9 @@ wb_list = wb_list |>
                 wab = as.numeric(active_water_authorizations_kmeans_bin)) |> 
   dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,wab)) |> 
   dplyr::select(-c(tib,iwbc,dfb,wab))
+
+  
+
 ```
 
 ### Table of All Waterbodies with Data
