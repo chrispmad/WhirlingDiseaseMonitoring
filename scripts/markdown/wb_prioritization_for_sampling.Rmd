@@ -292,8 +292,6 @@ if(nrow(new_wb_for_list) > 0){
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
-
-
 ```{r kfo_filter}
 
 
@@ -351,8 +349,6 @@ wb_fish_existing <- fish_summary |>
 wb_list<- wb_list |>
   left_join(wb_fish_existing |> st_drop_geometry(), by = c("GNIS_NA", "WATERSH"))
 ```
-
-
 
 ```{r commented_hatcheries}
 
@@ -613,8 +609,6 @@ ggplot() +
 #   dplyr::filter(!duplicated(GAZETTED_NAME))
 ```
 
-
-
 ```{r}
 
 # #### Infectable Downstream Watersheds
@@ -851,8 +845,6 @@ wb_list = wb_list |>
 
 If we only take Water Authorization points of status type 'Current' and drop all the rest, there are `r nrow(water_apps |> dplyr::filter(approval_status == 'Current'))` points to consider; `r nrow(water_apps_w_wb_info |> dplyr::filter(!is.na(GNIS_NA)))` of these overlap with one of the waterbodies with at least one watercraft inspection tied to it or at least one mention of it in the angler survey data.
 
-
-
 ```{r overlay_tubifex_results}
 
 ### Overlay of Positive Tubifex Results
@@ -938,9 +930,10 @@ wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suita
 
 ```
 
-### Mining Sites 
+### Mining Sites
 
 Current method: count number of mining sites within 5km of each waterbody.
+
 ```{r mines_across_BC, fig.width = 9, fig.height = 6}
 if(!file.exists("data/mining_bcdata_layer.rds")){
   mining = bcl[str_detect(bcl,"mine-")]
@@ -1043,7 +1036,15 @@ wb_list = wb_list |>
 
 ```
 
-### Overlay Susceptible Species Occurrences
+### Water Quality: DO and Phosphorous
+
+We queried the Environmental Monitoring System database for records mentioning the keywords "mine" or "mill", and for parameters Dissolved Oxygen and Phosphorous, for a first pass at water quality.
+
+![](images/EMS_mine_mills_dissolved_oxygen_data.jpg)
+
+![](images/EMS_mine_mills_phosphorous_data.jpg)
+
+### Susceptible Species Occurrences
 
 viii. Overlay susceptible species occurrences (present/absent for each waterbody) and facet map by species at this stage; maybe later we'll remove WBs with 0. We could apply this and show the effect of doing this.
 
@@ -1304,7 +1305,6 @@ wb_list_SARA = wb_list |>
   dplyr::filter(!is.na(SARA))
 ```
 
-
 ```{r write_out_results_to_excel_file}
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "All Waterbodies")
@@ -1385,6 +1385,7 @@ m
 ```
 
 ### Priority Waterbodies with SARA Overlaps
+
 ```{r}
 
 priority_pal = colorNumeric("viridis", domain = wb_list_SARA$priority)
