@@ -1318,9 +1318,8 @@ openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA)-1)
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
-### Leaflet Map - Provincial Risk
-
 ```{r fig.width = 9, fig.height = 6}
+### Leaflet Map - Provincial Risk
 library(leaflet)
 
 priority_pal = colorNumeric("viridis", domain = wb_list$priority)
@@ -1380,7 +1379,7 @@ m = m |>
       autoCollapse = F, hideMarkerOnCollapse = TRUE,
     ))
 
-m
+# m
 
 ```
 
@@ -1446,4 +1445,3 @@ m = m |>
 
 m
 ```
-
