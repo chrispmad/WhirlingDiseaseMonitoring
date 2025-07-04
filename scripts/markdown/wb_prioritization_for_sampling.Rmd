@@ -1262,7 +1262,7 @@ wb_list = wb_list |>
                 iwbc = as.numeric(insp_from_wd_bc_wb_kmeans_bin),
                 dfb = as.numeric(days_fished_kmeans_bin),
                 wab = as.numeric(active_water_authorizations_kmeans_bin)) |> 
-  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,tib)) |> 
+  dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,wab)) |> 
   dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
