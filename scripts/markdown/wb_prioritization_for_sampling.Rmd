@@ -900,7 +900,9 @@ These variables and their contributions are used to assess the relative suitabil
 # 
 # Maxent produced habitat suitability maps, based on a set of pre-determined parameters. It uses the presences of tubifex to assess the rest of the province and determine where tubifex is likely to be found. This is then assigned value of habitat/not-habitat based on internal fitting of parameters.
 # 
-tubifex_maxent<- terra::rast("output/habitat_maxent_tubifex_binary_fc.LQ_rm.3.tif")
+
+# note, I changed this from the binary output and now things seem to not be working well... gah!
+tubifex_maxent<- terra::rast("output/habitat_maxent_tubifex_fc.LQ_rm.3.tif")
 #create factors for the values in the raster
 tubifex_maxent <- terra::as.factor(tubifex_maxent)
 
@@ -921,6 +923,7 @@ if(!interactive()){
 
 # For the wbs_list, find the overlap with the raster abd add a column for tubifex habitat suitability.
 bc_crs <- "EPSG:3005"
+# terra::crs(tubifex_maxent) = "EPSG:4326"
 tubifex_maxent <- project(tubifex_maxent, bc_crs, method = "near")
 wb_vect <- vect(wb_list)
 factor_levels <- levels(tubifex_maxent)[[1]]  # Only one layer
@@ -1087,13 +1090,59 @@ wb_list = wb_list |>
 
 ```
 
+```{r}
 ### Water Quality: DO and Phosphorous
 
-We queried the Environmental Monitoring System database for records mentioning the keywords "mine" or "mill", and for parameters Dissolved Oxygen and Phosphorous, for a first pass at water quality.
+# We queried the Environmental Monitoring System database for records mentioning the keywords "mine" or "mill", and for parameters Dissolved Oxygen and Phosphorous, for a first pass at water quality.
+# 
+# ![](images/EMS_mine_mills_dissolved_oxygen_data.jpg)
+# 
+# ![](images/EMS_mine_mills_phosphorous_data.jpg)
+```
 
-![](images/EMS_mine_mills_dissolved_oxygen_data.jpg)
+### Water Quality
 
-![](images/EMS_mine_mills_phosphorous_data.jpg)
+We used Environmental Monitoring System database water chemistry analyte variables including dissolved oxygen (DO), dissolved organic carbon (DOC), phosphorous, nitrogen, as well as a measure of turbidity, to describe water quality conditions across B.C. To fill in spatial data gaps, we used an interpolation technique called 'kriging' that uses nearest-neighbour values to calculate intermediate values where necessary.
+
+```{r water_quality_plots, fig.width=10, fig.height = 8}
+do_r = terra::rast(paste0(onedrive_wd,"raster/Oxygen_Dissolved_All_masked_krig.tif"))
+doc_r = terra::rast(paste0(onedrive_wd,"raster/Carbon_Dissolved_Organic_All_masked_krig.tif"))
+phos_r = terra::rast(paste0(onedrive_wd,"raster/Phosphorus_Total_Dissolved_All_masked_krig.tif"))
+nitr_r = terra::rast(paste0(onedrive_wd,"raster/Nitrogen_Total_All_masked_krig.tif"))
+temp_r = terra::rast(paste0(onedrive_wd,"raster/Temperature_All_masked_krig.tif"))
+turb_r = terra::rast(paste0(onedrive_wd,"raster/Turbidity_All_masked_krig.tif"))
+
+# Concatenate rasts into a spatraster with many layers
+all_r = c(do_r, doc_r, phos_r, nitr_r, temp_r, turb_r)
+
+# Name the layers
+names(all_r) = c("DO","DOCarbon","Phos","Nitr","Temp","Turb")
+
+# plot, splitting by layer 
+plot_list = 1:length(names(all_r)) |> 
+  purrr::map( ~ {
+    ggplot() +
+      tidyterra::geom_spatraster(data = all_r[[.x]]) + 
+      scale_fill_viridis_c() + 
+      labs(fill = unique(names(all_r[[.x]])))
+  })
+
+patchwork::wrap_plots(plot_list)
+
+bc_crs <- "EPSG:3005"
+all_r <- project(all_r, bc_crs, method = "near")
+wb_vect <- vect(wb_list)
+# factor_levels <- levels(tubifex_maxent)[[1]]  # Only one layer
+all_r_extracted <- terra::extract(all_r, wb_vect)
+
+all_r_summarised <- all_r_extracted |>
+  group_by(ID) |>
+  reframe(across(everything(), \(x) round(median(x,na.rm=T),3)))
+
+wb_list = wb_list |> 
+  cbind(all_r_summarised)
+
+```
 
 ### Waterbody temperatures
 
@@ -1104,11 +1153,30 @@ Whirling disease host production is maximised between 10 and 17 degrees.
 # We have 3 sources of water temperature - hydroclim data, EMS data, and Aquarius
 # hydroclim only does the southern part of the province. Lets start with EMS and see what we can match
 
+monthly_temp_rast_list = 1:12 |> 
+  purrr::map( ~ {
+    terra::rast(paste0(onedrive_wd,"raster/monthly_temperature/Temperature_All_",.x,"_masked_krig.tif"))[[1]]
+  })
 
+m_rasts = terra::rast(monthly_temp_rast_list)
+
+names(m_rasts) = paste0(month.abb,"_med_temp")
+
+monthly_temps_extracted <- terra::extract(m_rasts, wb_vect)
+
+monthly_temps_summarised <- monthly_temps_extracted |>
+  group_by(ID) |>
+  reframe(across(everything(), \(x) round(median(x,na.rm=T),3)))
+
+wb_list = wb_list |> 
+  cbind(all_r_summarised)
 
 ```
 
-
+Example raster for April:
+```{r}
+plot(m_rasts[[4]])
+```
 
 ### Susceptible Species Occurrences
 
@@ -1320,9 +1388,6 @@ wb_list = wb_list |>
   dplyr::mutate(sampled_2024 = tidyr::replace_na(sampled_2024, FALSE))
 ```
 
-ix. Add in expert opinion from regions, First Nations, etc., as available
-x.  In future, we'll bring in SARA-listed species / COSEWIC
-
 ```{r add_together_variables}
 wb_list = wb_list |> 
   dplyr::mutate(tib = as.numeric(TotalInspections_kmeans_bin),
@@ -1331,9 +1396,6 @@ wb_list = wb_list |>
                 wab = as.numeric(active_water_authorizations_kmeans_bin)) |> 
   dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,wab)) |> 
   dplyr::select(-c(tib,iwbc,dfb,wab))
-
-  
-
 ```
 
 ### Table of All Waterbodies with Data
@@ -1352,11 +1414,11 @@ wb_list = wb_list |>
                 susceptible_spp = sus_spp,
                 SARA = sara,
                 known_fish_occs = known_fish
-                ) |> 
-  dplyr::select(GNIS_NA:days_fished_bin,
-                active_water_auths,active_water_auths_bin,
-                priority,
-                fish_edna_positive_in_watershed:infectable,tubifex_edna_positive_in_watershed:SARA,stocked_species,known_fish_occs)
+                ) #|> 
+  # dplyr::select(GNIS_NA:days_fished_bin,
+  #               active_water_auths,active_water_auths_bin,
+  #               priority,
+  #               fish_edna_positive_in_watershed:infectable,tubifex_edna_positive_in_watershed:SARA,stocked_species,known_fish_occs)
 ```
 
 ```{r show_results_data_table}
