@@ -879,7 +879,21 @@ wb_list = wb_list |>
 
 ```
 
-```{r tubifex_maxent}
+### Tubifex MaxEnt Maps
+
+MaxEnt uses environmental variables to assess suitable habitat for a species, basedon their known locations. For Tubifex, we used carbon, conductivity, nitrates, oxygen, turbidity and slope as potential predictors. The model then predicts how suitable habitat is across the province, based on these variables and the known locations of Tubifex.
+
+The model predicted the following variables to contribute to habitat suitability for Tubifex:
+```{r tubifex contributions}
+tub_contributions<-readRDS("output/contributions_tubifex_maxent.rds")
+
+kableExtra::kable(tub_contributions, format = "html", caption = "Tubifex MaxEnt Contributions") |>
+  kableExtra::kable_styling("striped", full_width = F) 
+
+```
+
+These variables and their contributions are used to assess the relative suitability of habitat across the province. 1 is the highest suitability, with 0 being lowest. This does not mean that Tubifex is present in all areas with a value of 1, but rather that the habitat is more suitable for Tubifex presence.
+```{r tubifex_maxent_maps}
 # ### Tubifex MaxEnt Model Results
 # 
 # vii. If tubifex density is accurate, overlay tubifex density map binned into presence/absence (doesn't contribute to score)
@@ -910,7 +924,9 @@ bc_crs <- "EPSG:3005"
 tubifex_maxent <- project(tubifex_maxent, bc_crs, method = "near")
 wb_vect <- vect(wb_list)
 factor_levels <- levels(tubifex_maxent)[[1]]  # Only one layer
-extracted <- extract(tubifex_maxent, wb_vect)
+extracted <- terra::extract(tubifex_maxent, wb_vect)
+# extracted <- as.data.frame(extracted)
+# factor_levels$fc.LQ_rm.3 <- as.numeric(factor_levels$fc.LQ_rm.3)
 extracted <- dplyr::left_join(extracted, factor_levels, by = "fc.LQ_rm.3")
 
 suitability_summary <- extracted |>
@@ -927,6 +943,39 @@ suitability_summary <- extracted |>
   )
 
 wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suitability
+
+
+maxent_rast<-terra::rast("output/habitat_maxent_tubifex_fc.LQ_rm.3.tif")
+
+if(!interactive()){
+ggplot() +
+  tidyterra::geom_spatraster(data = maxent_rast, aes(fill = fc.LQ_rm.3))+
+  geom_sf(data = bcmaps::bc_bound(), fill = NA, color = "black") +
+  scale_fill_gradientn(
+    colors = RColorBrewer::brewer.pal(9, "YlOrBr"),
+    na.value = "transparent",
+    name = "Habitat suitability"
+  ) +
+    ggthemes::theme_map()
+  
+  
+}
+
+
+if(!interactive()){
+ggplot() +
+  tidyterra::geom_spatraster(data = tubifex_maxent) +  # Raster layer
+  geom_sf(data = bcmaps::bc_bound(), fill = NA, color = "black") +  # BC boundary
+  geom_sf(data = wb_list, color = "blue", alpha = 0.5) +  # Waterbodies
+  scale_fill_manual(
+    values = c("0" = "lightgreen", "1" = "purple"),
+    na.value = "transparent"  # Handle NA values
+  ) +
+  labs(fill = 'Suitable\nHabitat') +
+  ggthemes::theme_map()+
+  theme(legend.position = "right",
+        plot.background = element_rect(fill = 'lightblue'))
+}
 
 ```
 
