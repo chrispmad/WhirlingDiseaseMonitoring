@@ -53,10 +53,11 @@ dat_max<-dat |>
   dplyr::filter(e_dna_results_tubifex == "Detected") |>
   distinct()
 
+
 carbon<-terra::rast(paste0(onedrive_wd,"/raster/Carbon_Dissolved_Organic_All_masked_krig.tif"))
 conductivitity<-terra::rast(paste0(onedrive_wd,"/raster/Conductivity_All_masked_krig.tif"))
-nitrates<-terra::rast(paste0(onedrive_wd,"/raster/Nitrogen_Total_All_masked_krig.tif"))
-oxygen<-terra::rast(paste0(onedrive_wd,"/raster/Oxygen_Dissolved_All_masked_krig.tif"))
+nitrates<-terra::rast(paste0(onedrive_wd,"/raster/Nitrate_(NO3)_Dissolved_All_masked_krig.tif"))
+oxygen<-terra::rast(paste0(onedrive_wd,"/raster/Dissolved_Oxygen-Field_All_masked_krig.tif"))
 turbidity<-terra::rast(paste0(onedrive_wd,"/raster/Turbidity_All_masked_krig.tif"))
 slope<-terra::rast(paste0(onedrive_wd,"/raster/slope_BC.tif"))
 
@@ -188,7 +189,14 @@ single_model_metrics = single_model_metrics |>
   tidyr::as_tibble() |>
   dplyr::select(metric, value)
 
+contributions = single_model_metrics |> 
+  dplyr::filter(str_detect(metric, "contribution")) |>
+  dplyr::mutate(variable = str_remove(metric, "contribution_")) |>
+  dplyr::select(variable, value) |> 
+  dplyr::mutate(value = as.numeric(value)) |>
+  dplyr::arrange(dplyr::desc(value))
 
+saveRDS(contributions, "output/contributions_tubifex_maxent.rds")
 
 # Convert RasterStack to SpatRaster
 preds_terra <- rast(me@predictions)  # terra::rast converts raster to SpatRaster
@@ -196,6 +204,11 @@ preds_terra <- rast(me@predictions)  # terra::rast converts raster to SpatRaster
 # Extract the right layer using the tune.args name
 layer_name <- as.character(opt.aicc$tune.args)
 suitability_raster <- preds_terra[[layer_name]]
+
+crs(suitability_raster) <- "EPSG:4326"  
+
+writeRaster(suitability_raster, paste0("output/habitat_maxent_tubifex_", layer_name, ".tif"), overwrite = TRUE)
+
 
 # Set threshold
 threshold_value <- opt.aicc$or.10p.avg
@@ -209,4 +222,5 @@ habitat_binary <- classify(habitat_binary, rcl = matrix(c(0, 0, 1, 1), ncol = 2,
 
 # Plot or export
 plot(habitat_binary, main = paste("Habitat / Not Habitat -", layer_name))
+crs(habitat_binary) <- "EPSG:4326"  
 writeRaster(habitat_binary, paste0("output/habitat_maxent_tubifex_binary_", layer_name, ".tif"), overwrite = TRUE)
