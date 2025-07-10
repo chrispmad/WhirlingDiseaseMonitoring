@@ -892,6 +892,10 @@ kableExtra::kable(tub_contributions, format = "html", caption = "Tubifex MaxEnt 
 
 ```
 
+The response curves show the relationship between the predictors and the predicted suitability for Tubifex. The x-axis represents the predictor variable, while the y-axis shows the predicted suitability score. The shaded area indicates the range of values for that predictor variable in the training data.
+
+![Response curves for Tubifex](output/response_curves_tubifex_maxent.png)
+
 These variables and their contributions are used to assess the relative suitability of habitat across the province. 1 is the highest suitability, with 0 being lowest. This does not mean that Tubifex is present in all areas with a value of 1, but rather that the habitat is more suitable for Tubifex presence.
 ```{r tubifex_maxent_maps}
 # ### Tubifex MaxEnt Model Results
@@ -1274,7 +1278,7 @@ fish_occs<-sf::st_transform(fish_occs, 3005)
 #species_names <-gsub(" ", "_", species_names)  # Ensure species name matches the column name
 
 wb_list$sus_spp <- ""
-
+#wb_list<- sf::st_transform(wb_list, 3005)
 
 for (sp in species_names) {
   # Filter points for the species
@@ -1318,7 +1322,32 @@ for (sp in species_names) {
 
 # get the sara listed species in each of the listed waterbodies
 
-sara_sp<-sf::read_sf(paste0(onedrive_wd,"CNF/DFO_SARA_occ_data_QGIS_simplified_SouthCoastBullTrout.gpkg"))
+sara_all<-sf::read_sf(paste0(onedrive_wd,"CNF/DFO_SARA_occ_data_QGIS_simplified_SouthCoastBullTrout.gpkg"))
+
+sara_sp <- sara_all |> 
+  filter(str_detect(Common_Name_EN, 
+                    regex("Cultus Pygmy Sculpin|Westslope Cutthroat Trout|Bull Trout|Rocky Mountain Ridged Mussel|Sockeye Salmon", 
+                          ignore_case = TRUE)))
+
+# add the sockeye from Cultus lake
+#get geom - then drop all column, makes new columns from sara layer and then add on sockeye salmon
+
+cultus_shape <- bcdata::bcdc_query_geodata("freshwater-atlas-lakes") |> 
+  filter(GNIS_NAME_1 == "Cultus Lake") |> 
+  collect() |> 
+  slice(2) |> 
+  sf::st_transform(4326)
+
+clake <- data.frame(
+  Common_Name_EN = "Sockeye Salmon", 
+  Population_EN = "Cultus Lake"
+) |> 
+  dplyr::mutate(geom = sf::st_geometry(cultus_shape)) |> 
+  sf::st_as_sf(sf_column_name = "geom", crs = sf::st_crs(cultus_shape))
+
+
+test<-bind_rows(sara_sp, clake)
+
 
 sara_sp <- sf::st_transform(sara_sp, st_crs(wb_list))
 
@@ -1335,8 +1364,11 @@ wb_with_sara_grouped <- wb_with_sara |>
 wb_with_sara_grouped <- wb_with_sara_grouped |>
   mutate(sara = na_if(trimws(sara), ""))
 
+
+
+
 wb_list<-wb_with_sara_grouped
-rm(wb_with_sara_grouped, sara_sp, wb_with_sara)
+rm(wb_with_sara_grouped, sara_sp, wb_with_sara,sara_all)
 
 ```
 
@@ -1824,7 +1856,7 @@ l |>
     group = "SARA present",
     popup = popupTable(
       wb_sara_over_5_in_frascol,
-      zcol = c("SARA")  # or multiple columns if needed
+      zcol = c("SARA")  
     )
   )|> 
   addMapPane(name = 'frascol', zIndex = 200) |> 
