@@ -11,6 +11,7 @@ library(readxl)
 library(sf)
 library(ENMeval)
 library(rJava)
+set.seed(912)
 
 rJava::.jinit()
 
@@ -60,9 +61,12 @@ nitrates<-terra::rast(paste0(onedrive_wd,"/raster/Nitrate_(NO3)_Dissolved_All_ma
 oxygen<-terra::rast(paste0(onedrive_wd,"/raster/Dissolved_Oxygen-Field_All_masked_krig.tif"))
 turbidity<-terra::rast(paste0(onedrive_wd,"/raster/Turbidity_All_masked_krig.tif"))
 slope<-terra::rast(paste0(onedrive_wd,"/raster/slope_BC.tif"))
+phosphorus<-terra::rast(paste0(onedrive_wd,"/raster/Phosphorus_All_masked_krig.tif"))
+water_temp<-terra::rast(paste0(onedrive_wd,"/raster/Temperature_All_masked_krig.tif"))
 
-rast_brick<-c(carbon, conductivitity, nitrates, oxygen, turbidity, slope)
-names(rast_brick) <- c("carbon", "conductivity", "nitrates", "oxygen", "turbidity", "slope")
+
+rast_brick<-c(carbon, conductivitity, nitrates, oxygen, turbidity, slope, phosphorus, water_temp)
+names(rast_brick) <- c("carbon", "conductivity", "nitrates", "oxygen", "turbidity", "slope", "phosphorus", "water_temperature")
 bc<-bcmaps::bc_bound()
 extentvect<- project(vect(bc),"EPSG:4326")
 watercourses = terra::rast(paste0(onedrive_wd,"fwa_streams/stream_order_three_plus_2km_res.tif"))
@@ -206,6 +210,91 @@ layer_name <- as.character(opt.aicc$tune.args)
 suitability_raster <- preds_terra[[layer_name]]
 
 crs(suitability_raster) <- "EPSG:4326"  
+
+# plot each of the parameters and their contributions to the maxent model
+best_model <- me@models[[opt.aicc$tune.args]]
+
+# Get the min, max, and mean of each raster layer
+env_stats <- list()
+for (var_name in names(rast_brick)) {
+  env_stats[[var_name]]$min <- terra::minmax(rast_brick[[var_name]])[1]
+  env_stats[[var_name]]$max <- terra::minmax(rast_brick[[var_name]])[2]
+  # For mean, it's safer to sample or calculate from non-NA cells
+  # For simplicity, we'll use a sample of cells to get means
+  sampled_values <- terra::values(rast_brick[[var_name]])
+  env_stats[[var_name]]$mean <- mean(sampled_values[!is.na(sampled_values)])
+}
+
+# 2. Create dummy data for plotting response curves
+# This will be a single data frame that we will then split or filter for plotting
+
+n_points <- 100 # Number of points to sample across the variable range
+
+# Create a template data frame with all variables at their mean
+template_df <- data.frame(
+  carbon = env_stats$carbon$mean,
+  conductivity = env_stats$conductivity$mean,
+  nitrates = env_stats$nitrates$mean,
+  oxygen = env_stats$oxygen$mean,
+  turbidity = env_stats$turbidity$mean,
+  slope = env_stats$slope$mean,
+  phosphorus = env_stats$phosphorus$mean,
+  water_temperature = env_stats$water_temperature$mean
+)
+
+# Initialize an empty list to store data for each variable's response curve
+plot_data_list <- list()
+
+# Loop through each variable to create its specific response data
+for (var_to_vary in names(rast_brick)) {
+  # Generate a sequence of values for the current variable
+  vary_sequence <- seq(env_stats[[var_to_vary]]$min, env_stats[[var_to_vary]]$max, length.out = n_points)
+  
+  # Create a data frame for prediction, with the current variable varying
+  # and all other variables held at their mean
+  temp_pred_df <- template_df[rep(1, n_points), ] # Replicate the template row
+  temp_pred_df[[var_to_vary]] <- vary_sequence
+  
+  # Predict suitability using the best_model
+  # Ensure the column order matches the training data (names(rast_brick))
+  pred_result <- predict(best_model, temp_pred_df[, names(rast_brick)], type = "cloglog")
+  
+  # Store the data for plotting
+  plot_data_list[[var_to_vary]] <- data.frame(
+    variable = var_to_vary,
+    x_value = vary_sequence,
+    suitability = pred_result
+  )
+}
+
+# Combine all the individual variable data frames into one for easier plotting
+all_plot_data <- bind_rows(plot_data_list)
+
+
+response_curves_plot <- ggplot(all_plot_data, aes(x = x_value, y = suitability)) +
+  geom_line(color = "darkblue", linewidth = 1.2) +
+  facet_wrap(~ variable, scales = "free_x", ncol = 3) + # scales="free_x" allows x-axis to vary per plot
+  labs(
+    title = "Maxent Model Response Curves",
+    x = "Variable Value",
+    y = "Habitat Suitability (cloglog)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    strip.text = element_text(face = "bold", size = 12), # Variable names in facets
+    axis.title = element_text(size = 10),
+    axis.text = element_text(size = 8)
+  )
+
+print(response_curves_plot)
+
+ggsave("output/response_curves_tubifex_maxent.png", response_curves_plot, width = 12, height = 8, dpi = 300)
+
+
+##############################################################################
+
+browseURL(maxent_html)
 
 writeRaster(suitability_raster, paste0("output/habitat_maxent_tubifex_", layer_name, ".tif"), overwrite = TRUE)
 

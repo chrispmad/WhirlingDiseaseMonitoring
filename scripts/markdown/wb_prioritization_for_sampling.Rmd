@@ -892,6 +892,10 @@ kableExtra::kable(tub_contributions, format = "html", caption = "Tubifex MaxEnt 
 
 ```
 
+The response curves show the relationship between the predictors and the predicted suitability for Tubifex. The x-axis represents the predictor variable, while the y-axis shows the predicted suitability score. The shaded area indicates the range of values for that predictor variable in the training data.
+
+![Response curves for Tubifex](output/response_curves_tubifex_maxent.png)
+
 These variables and their contributions are used to assess the relative suitability of habitat across the province. 1 is the highest suitability, with 0 being lowest. This does not mean that Tubifex is present in all areas with a value of 1, but rather that the habitat is more suitable for Tubifex presence.
 ```{r tubifex_maxent_maps}
 # ### Tubifex MaxEnt Model Results
@@ -1274,7 +1278,7 @@ fish_occs<-sf::st_transform(fish_occs, 3005)
 #species_names <-gsub(" ", "_", species_names)  # Ensure species name matches the column name
 
 wb_list$sus_spp <- ""
-
+#wb_list<- sf::st_transform(wb_list, 3005)
 
 for (sp in species_names) {
   # Filter points for the species
@@ -1318,7 +1322,32 @@ for (sp in species_names) {
 
 # get the sara listed species in each of the listed waterbodies
 
-sara_sp<-sf::read_sf(paste0(onedrive_wd,"CNF/DFO_SARA_occ_data_QGIS_simplified_SouthCoastBullTrout.gpkg"))
+sara_all<-sf::read_sf(paste0(onedrive_wd,"CNF/DFO_SARA_occ_data_QGIS_simplified_SouthCoastBullTrout.gpkg"))
+
+sara_sp <- sara_all |> 
+  filter(str_detect(Common_Name_EN, 
+                    regex("Cultus Pygmy Sculpin|Westslope Cutthroat Trout|Bull Trout|Rocky Mountain Ridged Mussel|Sockeye Salmon", 
+                          ignore_case = TRUE)))
+
+# add the sockeye from Cultus lake
+#get geom - then drop all column, makes new columns from sara layer and then add on sockeye salmon
+
+cultus_shape <- bcdata::bcdc_query_geodata("freshwater-atlas-lakes") |> 
+  filter(GNIS_NAME_1 == "Cultus Lake") |> 
+  collect() |> 
+  slice(2) |> 
+  sf::st_transform(4326)
+
+clake <- data.frame(
+  Common_Name_EN = "Sockeye Salmon", 
+  Population_EN = "Cultus Lake"
+) |> 
+  dplyr::mutate(geom = sf::st_geometry(cultus_shape)) |> 
+  sf::st_as_sf(sf_column_name = "geom", crs = sf::st_crs(cultus_shape))
+
+
+test<-bind_rows(sara_sp, clake)
+
 
 sara_sp <- sf::st_transform(sara_sp, st_crs(wb_list))
 
@@ -1335,8 +1364,11 @@ wb_with_sara_grouped <- wb_with_sara |>
 wb_with_sara_grouped <- wb_with_sara_grouped |>
   mutate(sara = na_if(trimws(sara), ""))
 
+
+
+
 wb_list<-wb_with_sara_grouped
-rm(wb_with_sara_grouped, sara_sp, wb_with_sara)
+rm(wb_with_sara_grouped, sara_sp, wb_with_sara,sara_all)
 
 ```
 
@@ -1416,6 +1448,128 @@ wb_list = wb_list |>
   dplyr::mutate(priority = ifelse(is.na(tib),0,tib) + ifelse(is.na(iwbc),0,iwbc) + ifelse(is.na(dfb),0,dfb) + ifelse(is.na(wab),0,wab)) |> 
   dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
+
+### First Nations listed priority waterbodies
+
+The listed waterbodies provided were:
+- Dutch Creek  
+- Windermere Creek  
+- Luxor Creek  
+- Galena Creek  
+- Slocan Lake  
+- Lower Kootenay River - how to do "lower"?
+- Lower Columbia River - how to do "lower"?  
+- Arrow Lake  
+- Okanagan Lake  
+- Skaha Lake  
+- Vasseux Lake  
+- Osoyoos Lake  
+- Okanagan River
+
+
+```{r other_considerations}
+wb_list = wb_list |> 
+  dplyr::mutate(other_species = NA, opportunistic_sampling = FALSE)
+
+
+
+wb_list_org = wb_list
+
+list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Creek",
+                  "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
+                  "Arrow Lake", "Okanagan Lake", "Skaha Lake", "Vasseux Lake", "Osoyoos Lake",
+                  "Okanagan River")
+
+# first, see if the the wbs in list_nations is already present in wb_list
+wb_list<-wb_list |> 
+  dplyr::mutate(Indigenous_priority = ifelse(GNIS_NA %in% list_nations, TRUE, FALSE))
+
+#for the ones that have not been found
+list_nations <- list_nations[!list_nations %in% wb_list$GNIS_NA]
+
+new_wbs<-bcdc_query_geodata("freshwater-atlas-rivers") |>
+  filter(GNIS_NAME_1 %in% list_nations) |> 
+  collect() |> 
+  st_transform(4326)
+
+if (nrow(new_wbs) > 0) {
+  new_wbs <- new_wbs |>
+    st_transform(4326) |>
+    group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |>
+    summarise()
+} else {
+  new_wbs <- st_sf(
+    GNIS_NAME_1 = character(),
+    WATERSHED_GROUP_ID = numeric(),
+    geometry = st_sfc(crs = 4326)
+  )
+}
+
+
+
+new_streams<-bcdc_query_geodata("freshwater-atlas-stream-network") |> 
+  filter(GNIS_NAME  %in% list_nations) |>
+  collect() |>
+  st_transform(4326)
+
+
+if (nrow(new_streams) > 0) {
+  new_streams <- new_streams |>
+    st_transform(4326) |>
+    group_by(GNIS_NAME, WATERSHED_GROUP_ID) |>
+    summarise()
+} else {
+  new_streams <- st_sf(
+    GNIS_NAME = character(),
+    WATERSHED_GROUP_ID = numeric(),
+    geometry = st_sfc(crs = 4326)
+  )
+}
+
+new_lakes<-bcdc_query_geodata("freshwater-atlas-lakes") |> 
+  filter(GNIS_NAME_1  %in% list_nations) |>
+  collect() |>
+  st_transform(4326)
+
+if (nrow(new_lakes) > 0) {
+  new_lakes <- new_lakes |>
+    st_transform(4326) |>
+    group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |>
+    summarise()
+} else {
+  new_lakes <- st_sf(
+    GNIS_NAME_1 = character(),
+    WATERSHED_GROUP_ID = numeric(),
+    geometry = st_sfc(crs = 4326)
+  )
+}
+
+
+if(nrow(new_streams) > 1){
+new_streams <- new_streams |> 
+  dplyr::rename(GNIS_NAME_1 = GNIS_NAME)
+}
+
+nations_wb<-bind_rows(new_wbs, new_streams, new_lakes) |> 
+  select(GNIS_NAME_1, WATERSHED_GROUP_ID, geometry) 
+
+nations_priorities <- nations_wb |> 
+  group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |> 
+  summarise(geometry = st_union(geometry), .groups = "drop")
+
+#lets add the nations_priorities to the wb_list and change the Indigenous_priority to TRUE for the new entries
+nations_priorities <- st_transform(nations_priorities, st_crs(wb_list))
+
+wb_list <- wb_list |> 
+  dplyr::bind_rows(
+    nations_priorities |> 
+      dplyr::mutate(Indigenous_priority = TRUE) |> 
+      dplyr::rename(GNIS_NA = GNIS_NAME_1, WATERSH = WATERSHED_GROUP_ID)
+  )
+
+
+```
+
 
 
 ```{r previous_wd_sampling_and_2024_identified_unsampled_sites, include=FALSE}
@@ -1512,7 +1666,7 @@ wd_not_sampled_2024_sf = wd_results |>
   dplyr::filter(!is.na(lat)) |> 
   sf::st_as_sf(coords = c("long","lat"), 
                              crs = 4326) |> 
-  dplyr::filter(include_in_map_y_n == "Y") |> 
+  #dplyr::filter(include_in_map_y_n == "Y") |> 
   dplyr::mutate(on_list_but_not_sampled_2024 = T) |> 
   dplyr::select(Reach = reach, Site = sample_site_name, on_list_but_not_sampled_2024)
 
@@ -1594,6 +1748,9 @@ wb_list<-st_transform(wb_list, 4326)
 
 wb_list_SARA = wb_list |> 
   dplyr::filter(!is.na(SARA))
+
+wb_list_NoSARA = wb_list |> 
+  dplyr::filter(is.na(SARA))
 ```
 
 ```{r write_out_results_to_excel_file}
@@ -1749,11 +1906,16 @@ my_pal = leaflet::colorFactor(palette = 'Spectral',
                               domain = years_sampled)
 
 
-l = leaflet() |> addTiles() |> addLayersControl(
-  position = 'bottomleft',
-  overlayGroups = years_sampled,
-  options = layersControlOptions(collapsed = FALSE)
-)
+
+
+
+l = leaflet() |> 
+  addTiles() |> 
+  addLayersControl(
+    position = 'bottomleft',
+    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
 
 for(i in 1:length(years_sampled)){
   the_year = years_sampled[i]
@@ -1789,18 +1951,36 @@ for(i in 1:length(years_sampled)){
 
 # Identify waterbodies that are within Fraser / Columbia watersheds and 
 # at or above priority 5.
-wb_over_5_in_frascol = wb_list[wb_list$priority >= 5,] |> 
+wb_no_sara_over_5_in_frascol = wb_list_NoSARA[wb_list_NoSARA$priority >= 5,] |> 
   sf::st_filter(frascol) |> 
   dplyr::filter(!duplicated(GNIS_NA))
+
+wb_sara_over_5_in_frascol = wb_list_SARA[wb_list_SARA$priority >= 5,] |> 
+  sf::st_filter(frascol) |> 
+  dplyr::filter(!duplicated(GNIS_NA))
+
 
 l |> 
   addMapPane(name = 'waterbodies', zIndex = 230) |> 
   addPolygons(
-    data = wb_over_5_in_frascol,
+    data = wb_no_sara_over_5_in_frascol,
     fillColor = 'purple',
     color = 'purple',
-    label = ~paste0(GNIS_NA, "; priority rank ",priority)
+    label = ~paste0(GNIS_NA, "; priority rank ", priority),
+    group = "SARA absent"
   ) |> 
+  addMapPane(name = 'waterbodies', zIndex = 260) |> 
+  addPolygons(
+    data = wb_sara_over_5_in_frascol,
+    fillColor = 'blue',
+    color = 'blue',
+    label = ~paste0(GNIS_NA, "; priority rank ", priority),
+    group = "SARA present",
+    popup = leafpop::popupTable(
+      wb_sara_over_5_in_frascol,
+      zcol = c("SARA")  
+    )
+  )|> 
   addMapPane(name = 'frascol', zIndex = 200) |> 
   addPolygons(
     data = frascol,
@@ -1823,7 +2003,11 @@ l |>
     color = 'black',
     weight = 1
   ) |> 
-  addLegend(position = 'topright', title = "WD Sampling History", pal = my_pal, values = years_sampled)
+  addLegend(position = 'topright', title = "WD Sampling History", pal = my_pal, values = years_sampled) |>
+  addLegend(position = "bottomright", title = "Waterbodies",
+            colors = c("blue", "purple"),
+            labels = c("SARA present", "SARA absent"),
+            opacity = 1)
 
 ```
 
