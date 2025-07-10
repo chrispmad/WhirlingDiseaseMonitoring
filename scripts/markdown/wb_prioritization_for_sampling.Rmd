@@ -914,6 +914,7 @@ if(length(tub_files) > 0){
   }
   
   tub_file = tub_file_options |> 
+    dplyr::filter(!str_detect(tub_files,"binary")) |> 
     dplyr::slice_max(file_cdate)
   
   tub_hab_not_hab_file = tub_file_options |> 
@@ -961,9 +962,10 @@ if(length(tub_files) > 0){
       ) +
       ggthemes::theme_map()
   
+    print(p_1)
+    
     names(hab_not_hab_tub_maxent) = 'hab.not.hab'
-    # hab_not_hab_tub_maxent$hab.not.hab = as.character(hab_not_hab_tub_maxent$hab.not.hab)
-    hab_not_hab_tub_maxent$suitable = 'NA'
+    # hab_not_hab_tub_maxent$suitable = 'NA'
     
     p_2 = ggplot() +
       tidyterra::geom_spatraster(data = hab_not_hab_tub_maxent, aes(fill = hab.not.hab)) +  # Raster layer
@@ -977,6 +979,8 @@ if(length(tub_files) > 0){
       ggthemes::theme_map()+
       theme(legend.position = "right",
             plot.background = element_rect(fill = 'lightblue'))
+    
+    p_2
 }
 ```
 
@@ -1413,9 +1417,11 @@ wb_list = wb_list |>
   dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
+
+```{r previous_wd_sampling_and_2024_identified_unsampled_sites, include=FALSE}
+
 ### Previous WD Sampling and 2024 Identified Unsampled Sites
 
-```{r previous_wd_sampling_and_2024_identified_unsampled_sites, fig.width = 9, fig.height = 6}
 # WD sampling 2017 - 2023
 wd_past_sampling_fish = read_excel("data/WD Sampling Data 2017_2023.xlsx", sheet = "Fish Data")
 wd_past_sampling_worms = read_excel("data/WD Sampling Data 2017_2023.xlsx", sheet = "Worm Data")
@@ -1480,7 +1486,7 @@ new_potential_dat_file = read_excel(paste0(lan_folder,"2 SCIENCE - Invasives/SPE
 local_data_file = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx')
 
 if(identical(names(new_potential_dat_file),names(local_data_file)) & nrow(new_potential_dat_file) == nrow(local_data_file)){
-  print("New data file has identical column names and number of rows. Copying locally...")
+  # print("New data file has identical column names and number of rows. Copying locally...")
   file.copy(from = paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"),
             to = paste0('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx'),
             overwrite = T)
@@ -1683,7 +1689,7 @@ m <- leaflet() |>
 
 # Add a polygon layer for each priority value
 for (p in priority_vals) {
-  if(p < 4) next
+  if(p < 5) next
   wb_subset <- wb_list_SARA |> filter(priority == p)
 
   m <- m |> addPolygons(
@@ -1730,7 +1736,9 @@ m = m |>
 m
 ```
 
-### Whirling Disease Sampling with Waterbodies with SARA overlaps
+### Whirling Disease Sampling with Waterbodies
+
+This map shows waterbodies with priority rating 5 and higher.
 
 ```{r}
 
