@@ -1469,7 +1469,7 @@ The listed waterbodies provided were:
 
 ```{r other_considerations}
 wb_list = wb_list |> 
-  dplyr::mutate(other_species = NA, opportunistic_sampling = FALSE)
+  dplyr::mutate(other_priority_species = NA, opportunistic_sampling = FALSE)
 
 
 
@@ -1477,8 +1477,9 @@ wb_list_org = wb_list
 
 list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Creek",
                   "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
-                  "Arrow Lake", "Okanagan Lake", "Skaha Lake", "Vasseux Lake", "Osoyoos Lake",
-                  "Okanagan River")
+                  "Columbia River", "Kootenay River",
+                  "Okanagan Lake", "Skaha Lake", "Vaseux Lake", "Osoyoos Lake",
+                  "Okanagan River", "Upper Arrow Lake", "Lower Arrow Lake")
 
 # first, see if the the wbs in list_nations is already present in wb_list
 wb_list<-wb_list |> 
@@ -1526,6 +1527,9 @@ if (nrow(new_streams) > 0) {
   )
 }
 
+new_streams <- new_streams |> 
+  st_buffer(10)
+
 new_lakes<-bcdc_query_geodata("freshwater-atlas-lakes") |> 
   filter(GNIS_NAME_1  %in% list_nations) |>
   collect() |>
@@ -1556,6 +1560,8 @@ nations_wb<-bind_rows(new_wbs, new_streams, new_lakes) |>
 nations_priorities <- nations_wb |> 
   group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |> 
   summarise(geometry = st_union(geometry), .groups = "drop")
+  
+  
 
 #lets add the nations_priorities to the wb_list and change the Indigenous_priority to TRUE for the new entries
 nations_priorities <- st_transform(nations_priorities, st_crs(wb_list))
@@ -1567,6 +1573,7 @@ wb_list <- wb_list |>
       dplyr::rename(GNIS_NA = GNIS_NAME_1, WATERSH = WATERSHED_GROUP_ID)
   )
 
+still_missing <- list_nations[!list_nations %in% wb_list$GNIS_NA]
 
 ```
 
