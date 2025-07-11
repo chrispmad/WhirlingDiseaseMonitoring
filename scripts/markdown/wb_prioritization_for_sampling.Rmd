@@ -1451,7 +1451,7 @@ wb_list = wb_list |>
 
 ### First Nations listed priority waterbodies
 
-The listed waterbodies provided were:
+The listed waterbodies provided were (in no particular order):
 - Dutch Creek  
 - Windermere Creek  
 - Luxor Creek  
@@ -1465,6 +1465,14 @@ The listed waterbodies provided were:
 - Vasseux Lake  
 - Osoyoos Lake  
 - Okanagan River
+- Slocan River
+- Duncan Dam (fish weir) = Is this Duncan Lake?
+- Moyie Lake (at the lake outflow (near Eagles nest golf course))
+-	Boat launch area in Castlegar (Columbia and Kootenay River?)
+- Beaver Creek Provincial Park in Trail (Columbia River?)
+- Trail boat launch (Columbia River?)
+
+
 
 
 ```{r other_considerations}
@@ -1479,7 +1487,8 @@ list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Cree
                   "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
                   "Columbia River", "Kootenay River",
                   "Okanagan Lake", "Skaha Lake", "Vaseux Lake", "Osoyoos Lake",
-                  "Okanagan River", "Upper Arrow Lake", "Lower Arrow Lake")
+                  "Okanagan River", "Upper Arrow Lake", "Lower Arrow Lake",
+                  "Slocan River", "Duncan Lake", "Moyie Lake")
 
 # first, see if the the wbs in list_nations is already present in wb_list
 wb_list<-wb_list |> 
