@@ -1457,8 +1457,8 @@ The listed waterbodies provided were:
 - Luxor Creek  
 - Galena Creek  
 - Slocan Lake  
-- Lower Kootenay River - how to do "lower"?
-- Lower Columbia River - how to do "lower"?  
+- Lower Kootenay River (how to do "lower"?)
+- Lower Columbia River (how to do "lower"?)  
 - Arrow Lake  
 - Okanagan Lake  
 - Skaha Lake  
@@ -1758,18 +1758,87 @@ wb_list_SARA = wb_list |>
 
 wb_list_NoSARA = wb_list |> 
   dplyr::filter(is.na(SARA))
+
 ```
+
+```{r make_reduced_list}
+
+# we want to take the wb_list, and then get the top 100 unique named wbs, ordered by priority and Indigenous_priority
+
+# wb_names_unique <- wb_list |>
+#   st_drop_geometry() |>
+#   dplyr::select(GNIS_NA, Indigenous_priority, priority) |>
+#   dplyr::distinct()
+#
+# indig_names <- wb_names_unique |>
+#   filter(Indigenous_priority == TRUE)
+# 
+# non_indig_names <- wb_names_unique |>
+#   filter(Indigenous_priority == FALSE) |>
+#   arrange(desc(priority)) |>
+#   slice_head(n = 100 - nrow(indig_names))
+# 
+# top_100_names <- bind_rows(indig_names, non_indig_names) |>
+#   pull(GNIS_NA)
+# 
+# wb_list_reduced <- wb_list |>
+#   filter(GNIS_NA %in% top_100_names) |>
+#   dplyr::select(
+#     GNIS_NA, WATERSH, priority, Indigenous_priority,
+#     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
+#     active_water_auths_bin, susceptible_spp, SARA
+#   ) |>
+#   dplyr::distinct()
+
+wb_list_reduced <- wb_list |> 
+  dplyr::select(
+    GNIS_NA, WATERSH, priority, Indigenous_priority,
+    boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
+    active_water_auths_bin, susceptible_spp, SARA
+  ) |> 
+  dplyr::distinct() |> 
+  dplyr::distinct(GNIS_NA, .keep_all = TRUE)
+
+indig_wbs <- wb_list_reduced |> 
+  filter(Indigenous_priority == TRUE)
+
+remaining_wbs <- wb_list_reduced |> 
+  filter(Indigenous_priority == FALSE) |> 
+  arrange(desc(priority)) |> 
+  slice_head(n = 100 - nrow(indig_wbs))
+
+wb_list_final <- bind_rows(indig_wbs, remaining_wbs) |> 
+  arrange(desc(Indigenous_priority), desc(priority))
+
+
+# wb_list |> 
+#   st_drop_geometry() |> 
+#   group_by(priority) |> 
+#   summarise(n = n()) 
+# 
+# wb_list_final |>  
+#   st_drop_geometry() |> 
+#   group_by(priority) |> 
+#   summarise(n = n()) 
+
+
+```
+
 
 ```{r write_out_results_to_excel_file}
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "All Waterbodies")
 openxlsx::addWorksheet(my_wb, "SARA Overlaps")
+openxlsx::addWorksheet(my_wb, "Top 100 priority list")
 openxlsx::writeData(my_wb, "All Waterbodies", wb_list |> 
   sf::st_drop_geometry())
 openxlsx::writeData(my_wb, "SARA Overlaps", wb_list_SARA |>
   sf::st_drop_geometry())
+openxlsx::writeData(my_wb, "Top 100 priority list", wb_list_final |> 
+  sf::st_drop_geometry())
 openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
 openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
+openxlsx::setColWidths(my_wb, "Top 100 priority list", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
