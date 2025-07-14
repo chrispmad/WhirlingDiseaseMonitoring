@@ -37,112 +37,12 @@ source("utils/bin_info_labs_ggplot_preset.R")
 ```
 
 ```{r load_data}
-if(!file.exists('data/anger_survey.rds')){
-  insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
-  
-  insp_from_wd_inf_to_wb$WB_POLY_ID = NA
-  insp_from_wd_inf_to_wb$BLK = NA
-  
-  for(i in 1:nrow(insp_from_wd_inf_to_wb)){
-    print(i)
-    the_wb = insp_from_wd_inf_to_wb[i,]
-    if(is.na(the_wb$BLK)){
-      if(str_detect(the_wb$GNIS_NA,"Lake")){
-        extra_info = bcdc_query_geodata('freshwater-atlas-lakes') |> 
-          filter(GNIS_NAME_1 == local(the_wb$GNIS_NA)) |> 
-          filter(INTERSECTS(the_wb)) |> 
-          collect()
-        
-        if(nrow(extra_info) > 0){
-          extra_info = extra_info |> 
-            dplyr::select(WATERSH = WATERSHED_GROUP_ID, 
-                          GNIS_NA = GNIS_NAME_1, 
-                          WATERBODY_POLY_ID, BLUE_LINE_KEY) |> 
-            dplyr::slice(1)
-        }
-        if(nrow(extra_info) > 0){
-          insp_from_wd_inf_to_wb[i,]$WB_POLY_ID = extra_info$WATERBODY_POLY_ID
-          insp_from_wd_inf_to_wb[i,]$BLK = extra_info$BLUE_LINE_KEY
-        }
-      }
-      if(str_detect(the_wb$GNIS_NA,"River")){
-        extra_info = bcdc_query_geodata('freshwater-atlas-rivers') |> 
-          filter(GNIS_NAME_1 == local(the_wb$GNIS_NA)) |> 
-          filter(INTERSECTS(the_wb)) |> 
-          collect() |> 
-          dplyr::select(WATERSH = WATERSHED_GROUP_ID, 
-                        GNIS_NA = GNIS_NAME_1, 
-                        WATERBODY_POLY_ID, BLUE_LINE_KEY) |> 
-          dplyr::slice(1)
-        if(nrow(extra_info) > 0){
-          insp_from_wd_inf_to_wb[i,]$WB_POLY_ID = extra_info$WATERBODY_POLY_ID
-          insp_from_wd_inf_to_wb[i,]$BLK = extra_info$BLUE_LINE_KEY
-        }
-      }
-    }
-  }
-  saveRDS(insp_from_wd_inf_to_wb, file = 'data/inspections_WD_outside_BC.rds')
-} else {
-  if(!exists("insp_from_wd_inf_to_wb")){
-    insp_from_wd_inf_to_wb = readRDS('data/inspections_WD_outside_BC.rds')
-  }
-}
+# Inspections for watercraft entering BC
+source("utils/bring_in_entering_BC_inspection_data.R")
+# Inspections for watercraft within BC
+source("utils/bring_in_within_BC_inspection_data.R")
 
-if(!file.exists("data/inspections_WD_inside_BC.rds")){
-  insp_from_wd_bc_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_BC_WD_Infected_Waterbodies.gpkg")
-  
-  insp_from_wd_bc_wb$WB_POLY_ID = NA
-  insp_from_wd_bc_wb$BLK = NA
-  
-  for(i in 1:nrow(insp_from_wd_bc_wb)){
-    print(i)
-    the_wb = insp_from_wd_bc_wb[i,]
-    if(is.na(the_wb$BLK)){
-      if(str_detect(the_wb$GNIS_NA,"Lake")){
-        extra_info = bcdc_query_geodata('freshwater-atlas-lakes') |> 
-          filter(GNIS_NAME_1 == local(the_wb$GNIS_NA)) |> 
-          filter(INTERSECTS(the_wb)) |> 
-          collect()
-        
-        if(nrow(extra_info) > 0){
-          extra_info = extra_info |> 
-            dplyr::select(WATERSH = WATERSHED_GROUP_ID, 
-                          GNIS_NA = GNIS_NAME_1, 
-                          WATERBODY_POLY_ID, BLUE_LINE_KEY) |> 
-            dplyr::slice(1)
-        }
-        if(nrow(extra_info) > 0){
-          insp_from_wd_bc_wb[i,]$WB_POLY_ID = extra_info$WATERBODY_POLY_ID
-          insp_from_wd_bc_wb[i,]$BLK = extra_info$BLUE_LINE_KEY
-        }
-      }
-      if(str_detect(the_wb$GNIS_NA,"River")){
-        extra_info = bcdc_query_geodata('freshwater-atlas-rivers') |> 
-          filter(GNIS_NAME_1 == local(the_wb$GNIS_NA)) |> 
-          filter(INTERSECTS(the_wb)) |> 
-          collect() |> 
-          dplyr::select(WATERSH = WATERSHED_GROUP_ID, 
-                        GNIS_NA = GNIS_NAME_1, 
-                        WATERBODY_POLY_ID, BLUE_LINE_KEY) |> 
-          dplyr::slice(1)
-        if(nrow(extra_info) > 0){
-          insp_from_wd_bc_wb[i,]$WB_POLY_ID = extra_info$WATERBODY_POLY_ID
-          insp_from_wd_bc_wb[i,]$BLK = extra_info$BLUE_LINE_KEY
-        }
-      }
-    }
-  }
-  saveRDS(insp_from_wd_bc_wb, file = "data/inspections_WD_inside_BC.rds")
-} else {
-  insp_from_wd_bc_wb = readRDS(file = "data/inspections_WD_inside_BC.rds")
-}
-
-if(!file.exists('data/anger_survey.rds')){
-  ang = sf::read_sf("W:/CMadsen/shared_data_sets/freshwater_fisheries_society_angler_survey_2022_2023.gpkg")
-  saveRDS(ang, file = 'data/anger_survey.rds')
-} else {
-  ang = readRDS('data/anger_survey.rds')
-}
+# The above datasets are key in establishing which of BC's many, many waterbodies are in scope for the rest of the analysis (i.e., they define wb_list)
 
 # Which waterbodies were sampled last year?
 wbs_sampled_2024 = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx")) |> 
@@ -158,38 +58,14 @@ $$
 P_w = EnteringBC_w + InsideBC_w + FishingDays_w + WaterAuths_w
 $$
 
-Where *P~w~* is the priority ranking of a given waterbody, EnteringBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, InsideBC~w~ is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, Fishingdays~w~ is the binned fishing days reported for a given waterbody, and WaterAuths~w~ is the binned number of current water authorization points within a given waterbody.
+Where *P~w~* is the priority ranking of a given waterbody, EnteringBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, InsideBC~w~ is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, Fishingdays~w~ is the binned fishing days reported for a given waterbody, and WaterAuths~w~ is the binned number of current water authorization points tied to MOTT projects within a given waterbody.
 
 ### Watercraft Inspections Coming from Infected States/Provinces
 
 These are binned watercraft inspections originating from infected states or provinces, as well as from waterbodies in British Columbia (BC) that are infected with whirling disease. The bins represent the number of watercraft headed to BC waterbodies from infected states, provinces, or infected BC waterbodies.
 
 ```{r watercraft_insp_from_inf_areas}
-
-# Note: the above file can kind of only be modified / updated on Chris' computer, as it depends on the ZQMussels R project (specifically, it's Options.csv file) and the {imdp} R package... but the output gets saved to Chris' W drive, so that should be accessible for everyone!
-
-insp_from_wd_inf_to_wb_b = bin_to_kmeans(insp_from_wd_inf_to_wb, 'TotalInspections', k_breaks)
-
-# Strip out pacific ocean and 'dry storage' destinations for watercraft.
-insp_from_wd_inf_to_wb_b = insp_from_wd_inf_to_wb_b |> 
-  dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
-
-bins_title = getKMeansBreaks(insp_from_wd_inf_to_wb_b$TotalInspections, k = k_breaks)
-
-# Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
-if(!interactive()){
-ggplot() + 
-  geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = insp_from_wd_inf_to_wb_b, aes(
-    fill = TotalInspections_kmeans_bin,
-    col = TotalInspections_kmeans_bin)) + 
-  ggthemes::theme_map() + 
-  scale_fill_brewer(palette = 'Spectral', direction = -1) +
-  scale_color_brewer(palette = 'Spectral', direction = -1) + 
-  bin_info_labs(bins_title)
-}
-wb_list = insp_from_wd_inf_to_wb_b |> 
-  dplyr::select(GNIS_NA, WATERSH, TotalInspections, TotalInspections_kmeans_bin )
+source("utils/chunk_inspections_entering_BC.R")
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
@@ -199,371 +75,33 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 These are where boats are going when coming from infected BC waterbodies.
 
 ```{r watercraft_insp_from_inf_wbs_in_bc}
-insp_from_wd_bc_wb_b = bin_to_kmeans(insp_from_wd_bc_wb, 'TotalInspections', k_breaks)
-
-# Strip out pacific ocean and 'dry storage' destinations for watercraft.
-insp_from_wd_bc_wb_b = insp_from_wd_bc_wb_b |> 
-  dplyr::filter(!GNIS_NA %in% c("Pacific Ocean","Dry Storage"))
-
-bins_title_bc = getKMeansBreaks(insp_from_wd_bc_wb_b$TotalInspections, k = k_breaks)
-
-# Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
-if(!interactive()){
-ggplot() + 
-  geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_kmeans_bin ,
-                                             col = TotalInspections_kmeans_bin )) + 
-  ggthemes::theme_map() + 
-  scale_fill_brewer(palette = 'Spectral', direction = -1) +
-  scale_color_brewer(palette = 'Spectral', direction = -1) + 
-  bin_info_labs(bins_title_bc)
-}
-# Identify any water bodies that aren't already in the list.
-new_wb_for_list = insp_from_wd_bc_wb_b |> 
-  dplyr::anti_join(
-    wb_list |> 
-      sf::st_drop_geometry() |> 
-      dplyr::select(GNIS_NA, WATERSH)
-  ) |> 
-  dplyr::select(GNIS_NA, WATERSH,
-                insp_from_wd_bc_wb = TotalInspections,
-                insp_from_wd_bc_wb_kmeans_bin = TotalInspections_kmeans_bin )
-
-wb_already_in_list = insp_from_wd_bc_wb_b |> 
-  dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
-  dplyr::select(GNIS_NA, WATERSH, insp_from_wd_bc_wb = TotalInspections,
-                insp_from_wd_bc_wb_kmeans_bin = TotalInspections_kmeans_bin ) |> 
-  sf::st_drop_geometry()
-
-# Not new waterbodies per list, per se, but new columns.
-wb_list = wb_list |> 
-  dplyr::left_join(
-    wb_already_in_list
-  )
-
-# Are there any new waterbodies to be added to the wb_list?
-if(nrow(new_wb_for_list) > 0){
-  wb_list = wb_list |> 
-    dplyr::bind_rows(
-      new_wb_for_list
-    )
-}
+source("utils/chunk_inspections_inside_BC.R")
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
-```{r}
-# ### Freshwater Fisheries Society Angler Survey (2022-2023)
-# 
-# ```{r}
-# # We do have angler use as a raster on onedrive, but we also have the original polygon object on the W: drive.
-# # ang = terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
-# 
-# 
-# # Drop waterbodies with no fishing
-# ang = ang |> 
-#   dplyr::filter(!is.na(days_fished))
-# 
-# # # Rename some columns.
-# # ang = ang |> 
-# #   dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
-# #                 GNIS_NA = Waterbody)
-# 
-# # Summarise at the waterbody name and watershed number level.
-# ang_s = ang |> 
-#   dplyr::group_by(GNIS_NA, WATERSH) |> 
-#   dplyr::summarise(days_fished = sum(days_fished,na.rm=T)) |> 
-#   dplyr::ungroup()
-# 
-# ang_s = bin_to_kmeans(ang_s, "days_fished", k_breaks)
-# 
-# bins_title_ang = getKMeansBreaks(ang_s$days_fished, k_breaks)
-# 
-# ggplot() + 
-#   geom_sf(data = bcmaps::bc_bound()) +
-#   geom_sf(data = ang_s, aes(col = days_fished_kmeans_bin, fill = days_fished_kmeans_bin)) + 
-#   scale_fill_brewer(palette = 'Spectral', direction = -1) +
-#   scale_color_brewer(palette = 'Spectral', direction = -1) + 
-#   ggthemes::theme_map() + 
-#   bin_info_labs(bins_title_ang)
-# 
-# # Identify any water bodies that aren't already in the list.
-# new_wb_for_list = ang_s |> 
-#   dplyr::anti_join(
-#     wb_list |> 
-#       sf::st_drop_geometry() |> 
-#       dplyr::select(GNIS_NA, WATERSH)
-#   ) |> 
-#   dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_kmeans_bin)
-# 
-# wb_already_in_list = ang_s |> 
-#   dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |> 
-#   dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_kmeans_bin) |> 
-#   sf::st_drop_geometry()
-# 
-# # Not new waterbodies per list, per se, but new columns.
-# wb_list = wb_list |> 
-#   dplyr::left_join(
-#     wb_already_in_list
-#   )
-# 
-# # Are there any new waterbodies to be added to the wb_list?
-# if(nrow(new_wb_for_list) > 0){
-#   wb_list = wb_list |> 
-#     dplyr::bind_rows(
-#       new_wb_for_list
-#     )
-# }
-```
-
 ### 2023-2024 iSEA Fishing Days
 
 ```{r}
-dfo_ang = readRDS(paste0(onedrive_wd,"fishing_days_by_waterbody_and_watershed.rds"))
-# 
-# # wbs present in both
-# nrow(ang_s |> dplyr::filter(GNIS_NA %in% dfo_ang$waterbody))
-# # wbs only in the 'old' angler survey data.
-# nrow(ang_s |> dplyr::filter(!GNIS_NA %in% dfo_ang$waterbody))
-
-# If > 95% of the lakes in the old dataset are present in the new, no question to just move to the new dataset. Numbers are wildly different in scale, though the ordering might be kind of similar.
-
-binned_ang<-bin_to_kmeans(dfo_ang, "fishing_days" , k_breaks)
-bin_vals<-getKMeansBreaks(binned_ang$fishing_days, k = k_breaks)                          
-if(!interactive()){
- ggplot() + 
-  geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = binned_ang, aes(col = fishing_days_kmeans_bin, fill = fishing_days_kmeans_bin)) +
-  scale_fill_brewer(palette = 'Spectral', direction = -1) +
-  scale_color_brewer(palette = 'Spectral', direction = -1) +
-  ggthemes::theme_map() +
-  bin_info_labs(bin_vals,'Fishing Days')
-}
-
- binned_ang<-st_transform(binned_ang, st_crs(wb_list))
-binned_ang<- binned_ang |> 
-  dplyr::rename( GNIS_NA = waterbody,
-                WATERSH = watershed,
-                days_fished = fishing_days,
-                days_fished_kmeans_bin = fishing_days_kmeans_bin)
-# Identify any water bodies that aren't already in the list.
-new_wb_for_list = binned_ang |>
-  dplyr::anti_join(
-    wb_list |>
-      sf::st_drop_geometry() |>
-      dplyr::select(GNIS_NA, WATERSH)
-  ) |>
-  dplyr::select(WATERSH, GNIS_NA, days_fished, days_fished_kmeans_bin)
-
-wb_already_in_list = binned_ang |>
-  dplyr::filter(paste0(WATERSH,GNIS_NA) %in% paste0(wb_list$WATERSH,wb_list$GNIS_NA)) |>
-  dplyr::select(GNIS_NA, WATERSH, days_fished, days_fished_kmeans_bin) |>
-  sf::st_drop_geometry()
-
-# Not new waterbodies per list, per se, but new columns.
-wb_list = wb_list |>
-  dplyr::left_join(
-    wb_already_in_list
-  )
-
-# Are there any new waterbodies to be added to the wb_list?
-if(nrow(new_wb_for_list) > 0){
-  wb_list = wb_list |>
-    dplyr::bind_rows(
-      new_wb_for_list
-    )
-}
-
-
+source("utils/chunk_dfo_angler_survey_data.R")
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
 ```{r kfo_filter}
-
-
-# save it to onedrive
-if(!file.exists(paste0(onedrive_wd,"kfo.rds"))){
-  kfo <- bcdc_query_geodata("known-bc-fish-observations-and-bc-fish-distributions") |>
-  collect() |> 
-  st_as_sf()
-  saveRDS(kfo, paste0(onedrive_wd,"kfo.rds"))
-} else {
-  kfo = readRDS(paste0(onedrive_wd,"kfo.rds"))
-}
-
-# kfo_spp<- kfo |> 
-#   dplyr::select(SPECIES_NAME, geometry)
-# 
-# joined <- st_join(kfo_spp, wb_list, join = st_intersects, left = FALSE)
-# 
-# fish_summary <- joined |>
-#   group_by(GNIS_NA, WATERSH) |> 
-#   summarize(
-#     known_fish = paste(sort(unique(SPECIES_NAME)), collapse = ", "),
-#     .groups = "drop"
-#   )
-# 
-# wb_list <- wb_list |>
-#   left_join(fish_summary, by = c("GNIS_NA", "WATERSH"))
-
-# Filter KFO to fish within waterbody bounds (fast!)
-kfo_spp <- kfo |> 
-  st_filter(wb_list, .predicate = st_intersects) |> 
-  select(SPECIES_NAME, geometry)
-
-# Join from fish to waterbodies (faster)
-joined <- st_join(kfo_spp, wb_list, join = st_intersects, left = FALSE)
-
-# Summarize known fish by waterbody
-fish_summary <- joined |>
-  group_by(GNIS_NA, WATERSH) |> 
-  summarize(
-    known_fish = paste(sort(unique(SPECIES_NAME)), collapse = ", "),
-    .groups = "drop"
-  )
-
-
-new_wb_fish <- fish_summary |>
-  anti_join(
-    wb_list |> st_drop_geometry() |> select(GNIS_NA, WATERSH),
-    by = c("GNIS_NA", "WATERSH")
-  )
-
-wb_fish_existing <- fish_summary |>
-  filter(paste0(WATERSH, GNIS_NA) %in% paste0(wb_list$WATERSH, wb_list$GNIS_NA))
-
-wb_list<- wb_list |>
-  left_join(wb_fish_existing |> st_drop_geometry(), by = c("GNIS_NA", "WATERSH"))
-```
-
-```{r commented_hatcheries}
-
-# ### Hatchery Locations
-# 
-# Locations of salmond hatcheries across the province.
-# 
-# ```{r hatchery raster}
-# hatchery_rast<-terra::rast(paste0(onedrive_wd,"raster/aquaculture_presence_absence_raster.tif"))
-# #plot
-# 
-# hatchery_points <- terra::as.points(hatchery_rast, na.rm = TRUE)
-# 
-# hatchery_sf <- sf::st_as_sf(hatchery_points)
-# 
-# # Filter to only presence points (value = 1)
-# hatchery_presence_sf <- hatchery_sf[hatchery_sf$sum == 1, ] |> 
-#   dplyr::rename(hatchery_present = sum)
-# 
-# # Plot with a single color and simplified legend
-# ggplot() +
-#   geom_sf(data = bcmaps::bc_bound()) +
-#   geom_sf(data = hatchery_presence_sf, color = "darkred", size = 1) +
-#   ggthemes::theme_map() +
-#   labs(color = NULL, subtitle = "Hatchery Presence in BC") +
-#   theme(legend.position = "none")
-# 
-# # Add in overlap of hatcheries to wb_list
-# hatcheries_by_wb = hatchery_presence_sf |> 
-#       sf::st_transform(3005) |> 
-#   sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
-#   sf::st_drop_geometry() |> 
-#   dplyr::filter(!is.na(GNIS_NA)) |> 
-#   dplyr::group_by(GNIS_NA, WATERSH) |> 
-#   dplyr::reframe(hatchery_present = sum(hatchery_present))
-# 
-# wb_list = wb_list |> 
-#   dplyr::left_join(
-#     hatcheries_by_wb
-#   )
-# ```
+source("utils/chunk_kfo_species_lookup.R")
 ```
 
 ### Watershed Groups with Fish Samples with WD
 
 ```{r}
-ws = sf::read_sf("W:/CMadsen/shared_data_sets/subwatersheds_BC.shp")
-
-edna_results = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx")) |> 
-  purrr::set_names(snakecase::to_snake_case)
-
-pos_fish_plus_parasite_edna = edna_results |> 
-  dplyr::filter(stringr::str_detect(fish_sampling_results_q_pcr_mc_detected, 'Positive') | e_dna_results_mc == 'Weak Detection')
-
-pos_fish_edna_sf = sf::st_as_sf(pos_fish_plus_parasite_edna,coords = c('long','lat'), crs = 4326)
-
-# Also pull in emerald lake, find its centroid.
-emerald_lake = bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |> 
-  bcdata::filter(GNIS_NAME_1 == 'Emerald Lake', WATERBODY_POLY_ID == 705013945) |> 
-  collect()
-
-emerald_lake_centroid = emerald_lake |> 
-  sf::st_centroid()
-
-ws_w_edna_fish = ws |> 
-  sf::st_filter(
-    pos_fish_edna_sf |> 
-      sf::st_transform(3005) |> 
-      dplyr::bind_rows(emerald_lake_centroid)
-  )
-
-ws_bbox = sf::st_bbox(ws_w_edna_fish |> sf::st_buffer(dist = 50000))
-
-if(!interactive()){
-ggplot() + 
-  geom_sf(data = bcmaps::bc_bound()) + 
-  geom_sf(data = ws_w_edna_fish, aes(fill = "Positive Fish \neDNA Results")) +
-  geom_sf(data = pos_fish_edna_sf, col = 'lightgreen') + 
-  geom_sf(data = emerald_lake, fill = 'lightgreen', col = 'lightgreen') + 
-  geom_sf_label(data = emerald_lake, aes(label = 'Emerald Lake'), nudge_x = 80000) +
-  # geom_sf_label(data = pos_fish_edna_sf, aes(label = sample_site_name), nudge_x = 80000, nudge_y = -100000) +
-  ggsflabel::geom_sf_label_repel(data = pos_fish_edna_sf,
-                                 aes(label = sample_site_name),
-                        force = 10, seed = 10) +
-  labs(fill = 'eDNA') + 
-  coord_sf(xlim = ws_bbox[c(1,3)],
-           ylim = ws_bbox[c(2,4)]) + 
-  ggthemes::theme_map() + 
-  ggspatial::annotation_scale()
-}
-
-wb_list = wb_list |> 
-  dplyr::mutate(fish_edna_positive_in_watershed = WATERSH %in% ws_w_edna_fish$WATERSHED_)
+source("utils/chunk_watersheds_with_WD_in.R")
 ```
 
 ### Connectivity of Infected Watersheds {.tabset}
 
 ```{r}
-if(!file.exists("data/named_watersheds_of_bc.rds")){
-  # small_watersheds = bcdc_query_geodata('freshwater-atlas-named-watersheds') |> 
-  small_watersheds = bcdc_query_geodata('wsa-third-order-and-greater-watersheds-50-000') |> 
-    collect()
-  saveRDS(small_watersheds, "data/named_watersheds_of_bc.rds")
-} else {
-  small_watersheds = readRDS("data/named_watersheds_of_bc.rds")
-  # test = small_watersheds |> 
-  #   # filter for 2nd order watersheds
-  #   dplyr::filter(str_detect(FWA_WATERSHED_CODE,"^[0-9]{3}-[^0]{6}"))
-}
-
-pos_fish_edna_sf_albers = pos_fish_edna_sf |> 
-  sf::st_transform(3005)
-
-small_watersheds_infected = small_watersheds |> 
-  sf::st_filter(pos_fish_edna_sf_albers)
-
-watershed_codes_infected = unique(str_extract(small_watersheds_infected$WSD_ID,'^.{4}'))
-
-# watershed groups?
-wsg = bcdc_query_geodata('freshwater-atlas-watershed-groups') |> 
-  filter(WATERSHED_GROUP_CODE %in% watershed_codes_infected) |> 
-  collect()
-
-infected_rivers = bcdc_query_geodata('freshwater-atlas-rivers') |> 
-  filter(INTERSECTS(small_watersheds_infected)) |> 
-  collect() |> 
-  dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
-  dplyr::summarise()
+source("utils/chunk_connectivity_of_connected_watersheds_outset.R")
 ```
 
 The following tabs describe our analysis of infected watersheds and which neighbouring watersheds are downstream and hydrologically connected.
@@ -602,115 +140,6 @@ ggplot() +
 }
 ```
 
-```{r find_rivers_downstream_of_infected_watershed_rivers}
-# # Use the FWA_WATERSHED_CODE to find rivers downstream of infected rivers
-# infected_rivers_fwa = unique(infected_rivers$FWA_WATERSHED_CODE)
-# infected_rivers_ds_fwa = str_replace(infected_rivers_fwa, "[0-9]{6}(?=-000000)","000000")
-# 
-# infected_rivers_downstream = bcdc_query_geodata('freshwater-atlas-rivers') |> 
-#   filter(FWA_WATERSHED_CODE %in% infected_rivers_ds_fwa) |> 
-#   collect() |> 
-#   dplyr::group_by(BLUE_LINE_KEY,GNIS_NAME_1,FWA_WATERSHED_CODE) |> 
-#   dplyr::summarise()
-```
-
-```{r show_rivers_downstream_of_rivers_in_infected_watersheds}
-#### Rivers Downstream of Rivers in Infected Watersheds 
-# ggplot() + 
-#   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
-#   geom_sf(data = adj_small_watersheds, fill = 'yellow') +
-#   geom_sf(data = small_watersheds_infected, fill = 'red') +
-#   geom_sf(data = infected_rivers, col = 'darkblue', fill = 'darkblue') + 
-#   geom_sf(data = infected_rivers_downstream)
-```
-
-```{r establish_elevation_differences}
-
-# #### Access elevation data
-# 
-# elev = elevatr::get_elev_raster(locations = sf::st_bbox(wsg), z = 8)
-# 
-# # Find mean elevation for each small watershed.
-# elev_per_ID = terra::extract(terra::rast(elev),terra::vect(adj_small_watersheds)) |> 
-#   tidyr::tibble()
-# 
-# names(elev_per_ID)[2] = "elev_in_meters"
-# 
-# elev_per_ID = elev_per_ID |> 
-#   dplyr::group_by(ID) |> 
-#   dplyr::reframe(mean_elev = mean(elev_in_meters))
-# 
-# adj_small_watersheds$mean_elev = elev_per_ID$mean_elev
-# 
-# if(!interactive()){
-# ggplot() + 
-#   tidyterra::geom_spatraster(data = terra::rast(elev), alpha = 0.5) +
-#   geom_sf(data = wsg, fill = 'transparent', col = 'white') + 
-#   geom_sf(data = adj_small_watersheds, aes(fill = mean_elev)) + 
-#   labs(fill = 'elevation (m)') + 
-#   coord_sf(xlim = sf::st_bbox(wsg)[c(1,3)],
-#            ylim = sf::st_bbox(wsg)[c(2,4)])
-# }
-```
-
-```{r determine_which_of_adjacent_watersheds_are_lower_downstream}
-# # Join the mean elevations to adj_small_watersheds
-# 
-# # 1st) For each infected watershed, find the adjacent watersheds (e.g. 5)
-# # 2nd) st_filter using river that is present in infected watershed (probs 1-2)
-# # 3rd) filter adjacent watersheds such that they are lower in mean elevation
-# #      than the infected watershed.
-# infectable_adj_watersheds = small_watersheds_infected |> 
-#   dplyr::group_by(GAZETTED_NAME) |> 
-#   dplyr::group_split() |> 
-#   purrr::map( ~ {
-# 
-#     # Find the adjacent small watersheds of the current .x
-#     small_ws_adj_to_x = adj_small_watersheds |> 
-#       sf::st_filter(
-#         .x |> 
-#           sf::st_buffer(dist = 50)
-#       )
-#       
-#     # Make sure there's a river that connects them.
-#     rivers_in_x = infected_rivers |> 
-#       dplyr::ungroup() |> 
-#       sf::st_filter(.x)
-#     
-#     small_ws_adj_to_x = small_ws_adj_to_x |> 
-#       sf::st_filter(rivers_in_x)
-#     
-#     small_ws_adj_to_x
-#     # # filter adjacent watersheds such that they are lower in mean elevation 
-#     # # than the infected watershed.
-#     # cutoff_elev = adj_small_watersheds |> 
-#     #   dplyr::filter(GAZETTED_NAME == .x$GAZETTED_NAME) |> 
-#     #   dplyr::pull(mean_elev)
-#     # 
-#     # infectable_small_watersheds = small_ws_adj_to_x |> 
-#     #   dplyr::filter(mean_elev <= cutoff_elev)
-#     # 
-#     # infectable_small_watersheds
-#   }) |> 
-#   dplyr::bind_rows() |> 
-#   dplyr::filter(!duplicated(GAZETTED_NAME))
-```
-
-```{r}
-
-# #### Infectable Downstream Watersheds
-# 
-# if(!interactive()){
-# ggplot() + 
-#   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
-#   geom_sf(data = adj_small_watersheds, fill = 'yellow') +
-#   geom_sf(data = infectable_adj_watersheds, fill = 'orange') +
-#   geom_sf(data = small_watersheds_infected, fill = 'red') +
-#   geom_sf(data = infected_rivers, col = 'darkblue', fill = 'darkblue') +
-#   geom_sf(data = pos_fish_edna_sf_albers)
-# }
-```
-
 #### Add Lakes and Rivers
 
 ```{r}
@@ -741,7 +170,6 @@ if(!interactive()){
 ggplot() + 
   geom_sf(data = wsg, col = 'black', fill = 'white', lwd = 1) +
   geom_sf(data = adj_small_watersheds, fill = 'yellow') +
-  # geom_sf(data = infectable_adj_watersheds, fill = 'orange') + 
   geom_sf(data = small_watersheds_infected, fill = 'red') +
   geom_sf(data = rivers_in_infectable_adj_watersheds, fill = 'blue', col = 'blue')+
   geom_sf(data = lakes_in_infectable_adj_watersheds, fill = 'blue', col = 'blue')+
@@ -795,36 +223,7 @@ ggplot() +
 ### Downstream Infectable Waterbodies
 
 ```{r}
-downstream_infectable_waterbodies = rivers_in_infectable_adj_watersheds |> 
-  dplyr::bind_rows(
-    lakes_in_infectable_adj_watersheds
-  ) |> 
-  dplyr::ungroup() |> 
-  sf::st_join(adj_small_watersheds |> 
-                dplyr::select(watershed_name = GAZETTED_NAME,
-                              stream_magnitude = STREAM_MAGNITUDE))
-  
-downstream_infectable_waterbodies_no_geom = downstream_infectable_waterbodies |> 
-  sf::st_drop_geometry() |> 
-  dplyr::select(-FWA_WATERSHED_CODE) |> 
-  dplyr::rename(waterbody_name = GNIS_NAME_1) |> 
-  dplyr::arrange(watershed_name)
-
-openxlsx::write.xlsx(downstream_infectable_waterbodies_no_geom, file = "output/list_of_infectable_downstream_waterbodies.xlsx")
-
-DT::datatable(downstream_infectable_waterbodies_no_geom)
-
-wb_list_infectables = wb_list |> 
-  sf::st_filter(
-    downstream_infectable_waterbodies
-  ) |> 
-  dplyr::mutate(infectable = TRUE) |> 
-  dplyr::select(infectable, GNIS_NA, WATERSH) |> 
-  sf::st_drop_geometry()
-
-wb_list = wb_list |> 
-  dplyr::left_join(wb_list_infectables) |> 
-  dplyr::mutate(infectable = tidyr::replace_na(infectable, FALSE))
+source('utils/chunk_downstream_infectable_waterbodies.R')
 ```
 
 ### Water Authorizations
@@ -832,137 +231,17 @@ wb_list = wb_list |>
 This layer is filtered for the names of MOTT technicians to zoom in on just those water authorizations related to MOTT maintenance projects (as opposed to water authorizations for on-site use, e.g. residential areas). The list includes the following names: Lyndsey, Duane, Mai-Linh, and Kristin. We need to get the last names from Grahame to be more precise (multiple Kristins in dataset).
 
 ```{r snag_water_auths}
-if(!file.exists('data/water_authorization_points.rds')){
-  # water_apps = bcdc_query_geodata('water-approval-points') |> 
-  #   # filter(INTERSECTS(wsg)) |> 
-  #   collect()
-  water_apps = sf::read_sf("W:/CMadsen/shared_data_sets/water_sustainability_act_approvals_section_10_and_11.shp")
-  water_apps = sf::st_filter(water_apps, bcmaps::bc_bound())
-  water_apps = water_apps |> dplyr::filter(stringr::str_detect(WSD_TECHNI, "(Lyndsey|Duane|Mai-Linh|Kristin)"))
-  saveRDS(water_apps,'data/water_authorization_points.rds')
-} else {
-  water_apps = readRDS('data/water_authorization_points.rds')
-}
-
-water_apps = water_apps |> 
-  dplyr::mutate(approval_status = dplyr::case_when(
-    APPROVAL_S %in% c("Abandoned","Aborted","Cancelled") ~ "Abandoned/Cancelled",
-    T ~ APPROVAL_S
-  ))
-
-library(leaflet)
-uniq_app_stat = unique(water_apps$approval_status)
-uniq_app_stat = na.omit(uniq_app_stat)
-
-app_stat_leg = colorFactor(palette = 'Spectral', domain = uniq_app_stat)
-
-l = leaflet() |> 
-    addTiles() |> 
-  addLayersControl(position = 'bottomleft',
-                   overlayGroups = uniq_app_stat,
-                   options = layersControlOptions(collapsed = F))
-
-zIndex_base = 300
-for(app_stat in uniq_app_stat){
-  zIndex_base = zIndex_base + 100
-  l = l |> 
-    addMapPane(name = app_stat, zIndex = zIndex_base) |> 
-    addCircleMarkers(
-      data = sf::st_transform(water_apps[water_apps$approval_status == app_stat,], 4326),
-      label = app_stat,
-      color = 'black',
-      weight = 1,
-      # color = ~app_stat_leg(approval_status),
-      fillColor = ~app_stat_leg(approval_status),
-      fillOpacity = 0.8,
-      group = app_stat,
-      options = pathOptions(pane = app_stat)
-    )
-}
-    
-l = l |> 
-  addLegend(pal = app_stat_leg, values = uniq_app_stat)
-
-if(!interactive()){
-  # ggplot() + 
-  #   geom_sf(data = bcmaps::bc_bound()) + 
-  #   geom_sf(data = water_apps, aes(col = approval_status))
-  l
-}
-
-water_apps_w_wb_info = water_apps |> 
-  dplyr::filter(approval_status %in% c('Current')) |>
-  sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH))
-
-water_apps_w_wb_cumulative = water_apps |> 
-  dplyr::filter(approval_status %in% c("Current","Superseded")) |>
-  sf::st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH)) |> 
-  sf::st_drop_geometry() |> 
-  dplyr::filter(!is.na(GNIS_NA)) |> 
-  dplyr::count(GNIS_NA,WATERSH, name = "cumulative_authorizations")
-  
-
-number_water_apps_per_wb = water_apps_w_wb_info |> 
-  dplyr::filter(!is.na(GNIS_NA)) |> 
-  sf::st_drop_geometry() |> 
-  dplyr::count(GNIS_NA,WATERSH, name = "active_water_authorizations")
-
-
-# Bin!
-number_water_apps_per_wb = bin_to_kmeans(number_water_apps_per_wb, 'active_water_authorizations', k_breaks)
-
-water_auths_bins = getKMeansBreaks(number_water_apps_per_wb$active_water_authorizations, k = k_breaks)
-
-wbs_with_water_apps = wb_list |> 
-  dplyr::inner_join(
-    number_water_apps_per_wb
-  )
-
-if(!interactive()){
- ggplot() + 
-  geom_sf(data = bcmaps::bc_bound()) +
-  geom_sf(data = wbs_with_water_apps, aes(col = active_water_authorizations_kmeans_bin, fill = active_water_authorizations_kmeans_bin)) +
-  scale_fill_brewer(palette = 'Spectral', direction = -1) +
-  scale_color_brewer(palette = 'Spectral', direction = -1) +
-  ggthemes::theme_map() +
-  bin_info_labs(water_auths_bins,"Water Auths")
-}
-
-
-wb_list = wb_list |> 
-  dplyr::left_join(number_water_apps_per_wb) |> 
-  dplyr::mutate(active_water_authorizations = tidyr::replace_na(active_water_authorizations, 0))
-
-water_apps |> 
-  sf::st_drop_geometry() |> 
-  dplyr::count(WSD_TECHNI, sort = T, name = 'number of rows') |> 
-  knitr::kable()
+source('utils/chunk_water_authorizations.R')
 ```
-
 
 If we only take Water Authorization points of status type 'Current' and drop all the rest, there are `r nrow(water_apps |> dplyr::filter(approval_status == 'Current'))` points to consider; `r nrow(water_apps_w_wb_info |> dplyr::filter(!is.na(GNIS_NA)))` of these overlap with one of the waterbodies with at least one watercraft inspection tied to it or at least one mention of it in the angler survey data.
 
 ```{r overlay_tubifex_results}
 
-### Overlay of Positive Tubifex Results
-
-# vi. Overlay eDNA results for tubifex
-
 tubifex_results = edna_results |>
   dplyr::filter(stringr::str_detect(e_dna_results_tubifex, 'Detected'))
 
 tubifex_results_sf = sf::st_as_sf(tubifex_results, coords = c('long','lat'), crs = 4326)
-
-# if(!interactive()){
-# ggplot()+
-#   geom_sf(data = bcmaps::bc_bound()) +
-#   geom_sf(data = tubifex_results_sf, aes(col = e_dna_results_tubifex)) +
-#   labs(col = 'Tubifex \neDNA Results') +
-#   scale_color_brewer(palette = "Set1") +
-#   ggthemes::theme_map() +
-#   ggspatial::annotation_scale()+
-#   theme(legend.position = 'bottom')
-# }
 
 ws_w_edna_tubifex = ws |>
   sf::st_filter(
@@ -985,7 +264,7 @@ The model predicted the following variables to contribute to habitat suitability
 tub_contributions<-readRDS("output/contributions_tubifex_maxent.rds")
 
 kableExtra::kable(tub_contributions, format = "html", caption = "Tubifex MaxEnt Contributions") |>
-  kableExtra::kable_styling("striped", full_width = F) 
+  kableExtra::kable_styling("striped", full_width = F)
 
 ```
 
@@ -994,95 +273,9 @@ The response curves show the relationship between the predictors and the predict
 ![Response curves for Tubifex](output/response_curves_tubifex_maxent.png)
 
 These variables and their contributions are used to assess the relative suitability of habitat across the province. 1 is the highest suitability, with 0 being lowest. This does not mean that Tubifex is present in all areas with a value of 1, but rather that the habitat is more suitable for Tubifex presence.
+
 ```{r tubifex_maxent_maps}
-# ### Tubifex MaxEnt Model Results
-# 
-# vii. If tubifex density is accurate, overlay tubifex density map binned into presence/absence (doesn't contribute to score)
-# 
-# Maxent produced habitat suitability maps, based on a set of pre-determined parameters. It uses the presences of tubifex to assess the rest of the province and determine where tubifex is likely to be found. This is then assigned value of habitat/not-habitat based on internal fitting of parameters.
-# 
-
-# note, I changed this from the binary output and now things seem to not be working well... gah!
-tub_files = list.files(path = 'output/', pattern = 'habitat_maxent_tubifex.*', full.names = T)
-
-if(length(tub_files) > 0){
-  
-  tub_file_options = data.frame(tub_files)
-  tub_file_options$file_cdate = NA
-  
-  for(i in 1:nrow(tub_file_options)){
-    tub_file_options$file_cdate = file.info(tub_file_options$tub_files)$ctime
-  }
-  
-  tub_file = tub_file_options |> 
-    dplyr::filter(!str_detect(tub_files,"binary")) |> 
-    dplyr::slice_max(file_cdate)
-  
-  tub_hab_not_hab_file = tub_file_options |> 
-    dplyr::filter(stringr::str_detect(tub_files,"_binary")) |> 
-    dplyr::slice_max(file_cdate)
-  
-  tubifex_maxent <- terra::rast(tub_file$tub_files)
-  hab_not_hab_tub_maxent = terra::rast(tub_hab_not_hab_file$tub_files)
-  # tubifex_maxent <- terra::as.factor(tubifex_maxent)
-  
-  #create factors for the values in the raster
-  # For the wbs_list, find the overlap with the raster abd add a column for tubifex habitat suitability.
-  bc_crs <- "EPSG:3005"
-  hab_not_hab_tub_maxent <- project(hab_not_hab_tub_maxent, bc_crs, method = "near")
-  wb_vect <- vect(wb_list)
-  # factor_levels <- levels(hab_not_hab_tub_maxent)[[1]]  # Only one layer
-  extracted <- terra::extract(hab_not_hab_tub_maxent, wb_vect)
-  # extracted <- dplyr::left_join(extracted, factor_levels, by = "fc.LQ_rm.4")
-  extracted = tidyr::as_tibble(extracted)
-  names(extracted)[2] = 'pred_var'
-  suitability_summary <- extracted |>
-    group_by(ID) |>
-    summarize(
-      max_val = if (all(is.na(pred_var))) NA_real_ else max(as.numeric(pred_var), na.rm = TRUE)
-    ) |>
-    mutate(
-      tubifex_habitat_suitability = case_when(
-        is.na(max_val) ~ NA_character_,
-        max_val >= 1 ~ "suitable",
-        TRUE ~ "unsuitable"
-      )
-    )
-  
-  wb_list$tubifex_habitat_suitability <- suitability_summary$tubifex_habitat_suitability
-  
-
-    names(tubifex_maxent) = 'rel.suitability'
-    p_1 = ggplot() +
-      tidyterra::geom_spatraster(data = tubifex_maxent, aes(fill = rel.suitability))+
-      geom_sf(data = bcmaps::bc_bound(), fill = NA, color = "black") +
-      scale_fill_gradientn(
-        colors = RColorBrewer::brewer.pal(9, "YlOrBr"),
-        na.value = "transparent",
-        name = "Habitat suitability"
-      ) +
-      ggthemes::theme_map()
-  
-    print(p_1)
-    
-    names(hab_not_hab_tub_maxent) = 'hab.not.hab'
-    # hab_not_hab_tub_maxent$suitable = 'NA'
-    
-    p_2 = ggplot() +
-      tidyterra::geom_spatraster(data = hab_not_hab_tub_maxent, aes(fill = hab.not.hab)) +  # Raster layer
-      geom_sf(data = bcmaps::bc_bound(), fill = NA, color = "black") +  # BC boundary
-      # geom_sf(data = wb_list, color = "blue", alpha = 0.5) +  # Waterbodies
-      # scale_fill_manual(
-      #   values = c("0" = "lightgreen", "1" = "purple"),
-      #   na.value = "transparent"  # Handle NA values
-      # ) +
-      labs(fill = 'Suitable\nHabitat') +
-      ggthemes::theme_map()+
-      theme(legend.position = "right",
-            plot.background = element_rect(fill = 'lightblue'))
-    
-    p_2
-}
+source("utils/chunk_tubifex_plots.R")
 ```
 
 ### Mining Sites
@@ -1193,59 +386,12 @@ wb_list = wb_list |>
 
 ```
 
-```{r}
-### Water Quality: DO and Phosphorous
-
-# We queried the Environmental Monitoring System database for records mentioning the keywords "mine" or "mill", and for parameters Dissolved Oxygen and Phosphorous, for a first pass at water quality.
-# 
-# ![](images/EMS_mine_mills_dissolved_oxygen_data.jpg)
-# 
-# ![](images/EMS_mine_mills_phosphorous_data.jpg)
-```
-
 ### Water Quality
 
 We used Environmental Monitoring System database water chemistry analyte variables including dissolved oxygen (DO), dissolved organic carbon (DOC), phosphorous, nitrogen, as well as a measure of turbidity, to describe water quality conditions across B.C. To fill in spatial data gaps, we used an interpolation technique called 'kriging' that uses nearest-neighbour values to calculate intermediate values where necessary.
 
 ```{r water_quality_plots, fig.width=10, fig.height = 8}
-do_r = terra::rast(paste0(onedrive_wd,"raster/Oxygen_Dissolved_All_masked_krig.tif"))
-doc_r = terra::rast(paste0(onedrive_wd,"raster/Carbon_Dissolved_Organic_All_masked_krig.tif"))
-phos_r = terra::rast(paste0(onedrive_wd,"raster/Phosphorus_Total_Dissolved_All_masked_krig.tif"))
-nitr_r = terra::rast(paste0(onedrive_wd,"raster/Nitrogen_Total_All_masked_krig.tif"))
-temp_r = terra::rast(paste0(onedrive_wd,"raster/Temperature_All_masked_krig.tif"))
-turb_r = terra::rast(paste0(onedrive_wd,"raster/Turbidity_All_masked_krig.tif"))
-
-# Concatenate rasts into a spatraster with many layers
-all_r = c(do_r, doc_r, phos_r, nitr_r, temp_r, turb_r)
-
-# Name the layers
-names(all_r) = c("DO","D_Carbon","Phos","Nitr","Temp","Turb")
-
-# plot, splitting by layer 
-plot_list = 1:length(names(all_r)) |> 
-  purrr::map(~ {
-    ggplot() +
-      tidyterra::geom_spatraster(data = all_r[[.x]]) + 
-      scale_fill_viridis_c() + 
-      labs(fill = unique(names(all_r[[.x]]))) +
-      ggthemes::theme_map()
-  })
-
-patchwork::wrap_plots(plot_list)
-
-bc_crs <- "EPSG:3005"
-all_r <- project(all_r, bc_crs, method = "near")
-wb_vect <- vect(wb_list)
-# factor_levels <- levels(tubifex_maxent)[[1]]  # Only one layer
-all_r_extracted <- terra::extract(all_r, wb_vect)
-
-all_r_summarised <- all_r_extracted |>
-  group_by(ID) |>
-  reframe(across(everything(), \(x) round(median(x,na.rm=T),3)))
-
-wb_list = wb_list |> 
-  cbind(all_r_summarised)
-
+source("utils/chunk_water_quality_plots.R")
 ```
 
 ### Waterbody temperatures
@@ -1268,10 +414,6 @@ names(m_rasts) =paste0("Temp_",month.abb[1:9])  # Only the first 9 months, as th
 
 monthly_temps_extracted <- terra::extract(m_rasts, wb_vect)
 
-# rename the columns, first is ID, then the months
-# month_names <- month.abb[1:(ncol(monthly_temps_extracted) - 1)]
-# new_names <- c("ID", paste0(month_names, "_temp"))
-# names(monthly_temps_extracted) <- new_names
 monthly_temps_summarised <- monthly_temps_extracted |>
   group_by(ID) |>
   reframe(across(everything(), \(x) round(median(x,na.rm=T),3)))
@@ -1283,8 +425,6 @@ wb_list = wb_list |>
 
 Monthly temperature rasters:
 ```{r}
-
-
 monthly_temp_rast_list |> 
   purrr::map(~ {
     ggplot() +
@@ -1294,8 +434,6 @@ monthly_temp_rast_list |>
       ggthemes::theme_map()
   }) |> 
   patchwork::wrap_plots()
-
-
 ```
 
 ### Susceptible Species Occurrences
@@ -1305,217 +443,11 @@ viii. Overlay susceptible species occurrences (present/absent for each waterbody
 The species considered susceptible to whirling disease are:
 
 ```{r overlay_susceptible_species, fig.width = 8, fig.height = 6}
-
-# Fish occurrence records queried from typical data sources.
-library(bcinvadeR)
-
-bc<-bcmaps::bc_bound() |> 
-  sf::st_transform(4326)
-
-# # Quick check - what are all of the different species in the known-bc-fish-occurrences layer that mention 'Whitefish' in the species name?
-# my_query = bcdata:::CQL("SPECIES_NAME like '%Whitefish'")
-# 
-# all_whitefish_recs = bcdc_query_geodata("aca81811-4b08-4382-9af7-204e0b9d2448") |> 
-#   filter(my_query) |> 
-#   collect()
-# 
-# all_whitefish_recs |> 
-#   sf::st_drop_geometry() |> 
-#   dplyr::count(SPECIES_NAME)
-# There are Broad, Giant Pygmy, Lake, ountain, Pygmy, and Round Whitefish.
-
-species_names <- c(
-  "Bull Trout", "Sockeye Salmon", "Cutthroat Trout", "Coho Salmon",
-  "Rainbow Trout", "Chinook Salmon", "Mountain Whitefish", 
-  "Atlantic Salmon", "Brown Trout", "Brook Trout", "Westslope Cutthroat Trout",
-  "Steelhead","Lake Whitefish","Round Whitefish","Pygmy Whitefish"
-)
-
-if(requery_occs){
-  species_occs <- lapply(species_names, function(sp) {
-    ocs<-try(suppressMessages(suppressWarnings(grab_aq_occ_data(sp, quiet = TRUE, sources = c("FDIS","Old Aquatic","iNaturalist")))))
-    if (!is.null(ocs)) {
-      outfile <- paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg")
-      sf::write_sf(ocs, outfile)
-    }
-    return(ocs)
-  })
-  
-}else{
-  species_occs <- lapply(species_names, function(sp) {
-    sf::read_sf(paste0("data/", gsub(" ", "_", sp), "_occurrences.gpkg"))
-  })
-}
-
-names(species_occs) <- gsub(" ", "_", species_names)
-
-fish_occs <- bind_rows(species_occs, .id = "species")
-
-# Quick double check of mountain whitefish and rainbow trout.
-
-# ggplot() + geom_sf(data = fish_occs[fish_occs$species == 'Mountain_Whitefish',])
-# ggplot() + geom_sf(data = fish_occs[fish_occs$species == 'Rainbow_Trout',])
-
-if(!interactive()){
-ggplot() + 
-  geom_sf(data = bc, color = "lightgrey") + 
-  geom_sf(data = fish_occs, aes(color = as.factor(Species)))+
-  facet_wrap( ~ Species)+
-  scale_color_viridis_d() +
-  labs(color = "Species") +
-  ggthemes::theme_map()+
-  theme(legend.position = "bottom")
-}
-
-# now is there an overlap of susceptible fish with the wb_list, for each species, new column with TRUE/FALSE for the species 
-
-fish_occs<-sf::st_transform(fish_occs, 3005)
-
-# Initialize columns for each species in wb_list
-#species_names <-gsub(" ", "_", species_names)  # Ensure species name matches the column name
-
-wb_list$sus_spp <- ""
-#wb_list<- sf::st_transform(wb_list, 3005)
-
-for (sp in species_names) {
-  # Filter points for the species
-  spoi<-gsub(" ", "_", sp)
-  sp_points <- fish_occs[fish_occs$species == spoi, ]
-  
-  # Check which waterbodies intersect with any points of this species
-  intersects <- st_intersects(wb_list, sp_points, sparse = FALSE)
-  
-  # Append species name to Fish_present where there's at least one intersecting point
-  for (i in seq_len(nrow(wb_list))) {
-    if (any(intersects[i, ])) {
-      if (wb_list$sus_spp[i] == "") {
-        wb_list$sus_spp[i] <- sp
-      } else {
-        wb_list$sus_spp[i] <- paste(gsub("_", " ",wb_list$sus_spp[i]), sp, sep = ", ")
-      }
-    }
-  }
-}
-
-# ggplot() + 
-#   geom_sf(data = wb_list[str_detect(wb_list$Fish_present,"Rainbow"),]) +
-#   geom_sf(data = fish_occs[fish_occs$species == 'Rainbow_Trout',], col = 'yellow') 
-
-# # An alternative to the above!
-# fish_occs_by_wb = fish_occs |> 
-#   st_join(wb_list |> dplyr::select(GNIS_NA,WATERSH))
-# 
-# fish_occs_by_wb = fish_occs_by_wb |> 
-#   sf::st_drop_geometry() |> 
-#   dplyr::group_by(GNIS_NA, WATERSH) |> 
-#   dplyr::reframe(Species = paste0(unique(Species), collapse = ', '))
-# 
-# wb_list = wb_list |> 
-#   dplyr::left_join(fish_occs_by_wb)
-
-# wb_list |> dplyr::filter(str_detect(Fish_present,"[rR]ainbow"))
-
-# The above looks perfect!
-
-# get the sara listed species in each of the listed waterbodies
-
-sara_all<-sf::read_sf(paste0(onedrive_wd,"CNF/DFO_SARA_occ_data_QGIS_simplified_SouthCoastBullTrout.gpkg"))
-
-sara_sp <- sara_all |> 
-  filter(str_detect(Common_Name_EN, 
-                    regex("Cultus Pygmy Sculpin|Westslope Cutthroat Trout|Bull Trout|Rocky Mountain Ridged Mussel|Sockeye Salmon", 
-                          ignore_case = TRUE)))
-
-# add the sockeye from Cultus lake
-#get geom - then drop all column, makes new columns from sara layer and then add on sockeye salmon
-
-cultus_shape <- bcdata::bcdc_query_geodata("freshwater-atlas-lakes") |> 
-  filter(GNIS_NAME_1 == "Cultus Lake") |> 
-  collect() |> 
-  slice(2) |> 
-  sf::st_transform(4326)
-
-clake <- data.frame(
-  Common_Name_EN = "Sockeye Salmon", 
-  Population_EN = "Cultus Lake"
-) |> 
-  dplyr::mutate(geom = sf::st_geometry(cultus_shape)) |> 
-  sf::st_as_sf(sf_column_name = "geom", crs = sf::st_crs(cultus_shape))
-
-
-test<-bind_rows(sara_sp, clake)
-
-
-sara_sp <- sf::st_transform(sara_sp, st_crs(wb_list))
-
-# Perform spatial join: match SARA species polygons to waterbodies
-wb_with_sara <- st_join(wb_list, sara_sp |> select(Common_Name_EN), left = TRUE)
-
-# Create or update a `sara` column: list of overlapping species names
-wb_with_sara_grouped <- wb_with_sara |>
-  group_by(across(all_of(names(wb_list)))) |>  # Group by original wb_list columns
-  summarise(sara = paste(unique(Common_Name_EN[!is.na(Common_Name_EN)]), collapse = "; "),
-            .groups = "drop")
-
-# Replace empty strings with NA (no SARA species overlap)
-wb_with_sara_grouped <- wb_with_sara_grouped |>
-  mutate(sara = na_if(trimws(sara), ""))
-
-
-
-
-wb_list<-wb_with_sara_grouped
-rm(wb_with_sara_grouped, sara_sp, wb_with_sara,sara_all)
-
+source("utils/chunk_susceptible_species_overlay.R")
 ```
 
 ```{r species_stocked_in_waterbodies}
-stonks = read_excel("data/hand-picked stocking locations.xlsx")
-
-stonks_sf = stonks |> 
-  dplyr::mutate(across(c(hand_lng,hand_lat), \(x) as.numeric(x))) |> 
-  dplyr::filter(!is.na(hand_lng)) |> 
-  dplyr::filter(!is.na(hand_lat)) |> 
-  dplyr::filter(is.numeric(hand_lng)) |> 
-  sf::st_as_sf(coords = c('hand_lng','hand_lat'), crs = 4326)
-
-# grab the species stocked in each.
-dat2024<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2024.csv"))
-dat2023<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2023.csv"))
-dat2022<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2022.csv"))
-
-dat2022 <- dat2022 |>  mutate(Year = 2022)
-dat2023 <- dat2023 |>  mutate(Year = 2023)
-dat2024 <- dat2024 |>  mutate(Year = 2024)
-
-all_years <- bind_rows(dat2022, dat2023, dat2024)
-
-stonks_sf_w_species = stonks_sf |> 
-  inner_join(all_years) |> 
-  dplyr::select(-c(lng,lat)) |> 
-  dplyr::group_by(Waterbody.Name, Nearest.Town) |> 
-  dplyr::summarise(stocked_species = paste0(unique(Species), collapse = ', '),
-                 geometry = st_union(geometry)) |> 
-  dplyr::ungroup() |> 
-  sf::st_transform(crs = st_crs(wb_list))
-
-# Do the little reverse spatial join thingy.
-stonks_sf_w_species_w_wblist = stonks_sf_w_species |> 
-  st_join(
-    wb_list |> dplyr::select(GNIS_NA,WATERSH)
-  )
-
-stocking_summarised_by_wb_list = stonks_sf_w_species_w_wblist |> 
-  sf::st_drop_geometry() |> 
-  dplyr::group_by(GNIS_NA, WATERSH) |> 
-  dplyr::reframe(stocked_species = paste0(unique(stocked_species), collapse = ', '))
-
-wb_list = wb_list |> 
-  dplyr::left_join(
-    stocking_summarised_by_wb_list
-  )
-
-DT::datatable(wb_list |> sf::st_drop_geometry())
+source("utils/chunk_stocked_species.R")
 ```
 
 ```{r add_if_wb_was_sampled_in_2024}
@@ -1570,261 +502,19 @@ The listed waterbodies provided were (in no particular order):
 - Trail boat launch (Columbia River?)
 
 
-
-
 ```{r other_considerations}
-wb_list = wb_list |> 
-  dplyr::mutate(other_priority_species = NA, opportunistic_sampling = FALSE)
-
-
-
-wb_list_org = wb_list
-
-list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Creek",
-                  "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
-                  "Columbia River", "Kootenay River",
-                  "Okanagan Lake", "Skaha Lake", "Vaseux Lake", "Osoyoos Lake",
-                  "Okanagan River", "Upper Arrow Lake", "Lower Arrow Lake",
-                  "Slocan River", "Duncan Lake", "Moyie Lake")
-
-# first, see if the the wbs in list_nations is already present in wb_list
-wb_list<-wb_list |> 
-  dplyr::mutate(Indigenous_priority = ifelse(GNIS_NA %in% list_nations, TRUE, FALSE))
-
-#for the ones that have not been found
-list_nations <- list_nations[!list_nations %in% wb_list$GNIS_NA]
-
-new_wbs<-bcdc_query_geodata("freshwater-atlas-rivers") |>
-  filter(GNIS_NAME_1 %in% list_nations) |> 
-  collect() |> 
-  st_transform(4326)
-
-if (nrow(new_wbs) > 0) {
-  new_wbs <- new_wbs |>
-    st_transform(4326) |>
-    group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |>
-    summarise()
-} else {
-  new_wbs <- st_sf(
-    GNIS_NAME_1 = character(),
-    WATERSHED_GROUP_ID = numeric(),
-    geometry = st_sfc(crs = 4326)
-  )
-}
-
-
-
-new_streams<-bcdc_query_geodata("freshwater-atlas-stream-network") |> 
-  filter(GNIS_NAME  %in% list_nations) |>
-  collect() |>
-  st_transform(4326)
-
-
-if (nrow(new_streams) > 0) {
-  new_streams <- new_streams |>
-    st_transform(4326) |>
-    group_by(GNIS_NAME, WATERSHED_GROUP_ID) |>
-    summarise()
-} else {
-  new_streams <- st_sf(
-    GNIS_NAME = character(),
-    WATERSHED_GROUP_ID = numeric(),
-    geometry = st_sfc(crs = 4326)
-  )
-}
-
-new_streams <- new_streams |> 
-  st_buffer(10)
-
-new_lakes<-bcdc_query_geodata("freshwater-atlas-lakes") |> 
-  filter(GNIS_NAME_1  %in% list_nations) |>
-  collect() |>
-  st_transform(4326)
-
-if (nrow(new_lakes) > 0) {
-  new_lakes <- new_lakes |>
-    st_transform(4326) |>
-    group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |>
-    summarise()
-} else {
-  new_lakes <- st_sf(
-    GNIS_NAME_1 = character(),
-    WATERSHED_GROUP_ID = numeric(),
-    geometry = st_sfc(crs = 4326)
-  )
-}
-
-
-if(nrow(new_streams) > 1){
-new_streams <- new_streams |> 
-  dplyr::rename(GNIS_NAME_1 = GNIS_NAME)
-}
-
-nations_wb<-bind_rows(new_wbs, new_streams, new_lakes) |> 
-  select(GNIS_NAME_1, WATERSHED_GROUP_ID, geometry) 
-
-nations_priorities <- nations_wb |> 
-  group_by(GNIS_NAME_1, WATERSHED_GROUP_ID) |> 
-  summarise(geometry = st_union(geometry), .groups = "drop")
-  
-  
-
-#lets add the nations_priorities to the wb_list and change the Indigenous_priority to TRUE for the new entries
-nations_priorities <- st_transform(nations_priorities, st_crs(wb_list))
-
-wb_list <- wb_list |> 
-  dplyr::bind_rows(
-    nations_priorities |> 
-      dplyr::mutate(Indigenous_priority = TRUE) |> 
-      dplyr::rename(GNIS_NA = GNIS_NAME_1, WATERSH = WATERSHED_GROUP_ID)
-  )
-
-still_missing <- list_nations[!list_nations %in% wb_list$GNIS_NA]
-
+source("utils/chunk_add_FN_priorities_and_other_considerations.R")
 ```
 
-
-
 ```{r previous_wd_sampling_and_2024_identified_unsampled_sites, include=FALSE}
+source("utils/chunk_previously_sampled_and_unsampled_sites.R")
+```
 
-### Previous WD Sampling and 2024 Identified Unsampled Sites
-
-# WD sampling 2017 - 2023
-wd_past_sampling_fish = read_excel("data/WD Sampling Data 2017_2023.xlsx", sheet = "Fish Data")
-wd_past_sampling_worms = read_excel("data/WD Sampling Data 2017_2023.xlsx", sheet = "Worm Data")
-
-wd_past_sampling_fish_sf = wd_past_sampling_fish |> 
-  sf::st_as_sf(coords = c("Easting","Northing"), crs = 32611) |> 
-  sf::st_transform(4326) |> 
-  dplyr::mutate(sample_type = "Fish Samples")
-
-wd_past_sampling_worms_sf = wd_past_sampling_worms |> 
-  sf::st_as_sf(coords = c("Easting","Northing"), crs = 32611) |> 
-  sf::st_transform(4326) |> 
-  dplyr::mutate(sample_type = "Tubifex")
-
-wd_past_sampling = dplyr::bind_rows(
-  wd_past_sampling_fish_sf,
-  wd_past_sampling_worms_sf
-) |> 
-  sf::st_transform(3005)
-
-# # Code from ChatGPT that works but doesn't fix the problem
-# st_endpoint <- function(line) {
-#   coords <- st_coordinates(line)
-#   st_point(coords[nrow(coords), ])
-# }
-# 
-# nearest_wb_index = sf::st_nearest_feature(wd_past_sampling, wb_list)
-# nearest_wb_geom = st_nearest_points(wd_past_sampling, wb_list[nearest_wb_index, ], pairwise = TRUE)
-# wd_past_sampling_snapped <- wd_past_sampling
-# wd_past_sampling_snapped$geometry <- st_geometry(nearest_wb_geom) %>% st_cast("LINESTRING") %>% lapply(function(line) st_endpoint(line)) %>% st_sfc(crs = st_crs(wd_past_sampling))
-
-# ggplot() + geom_sf(data = wd_past_sampling_snapped, col = 'red') + 
-#   geom_sf(data =wd_past_sampling, col = 'black')
-
-# wd_past_sampling = wd_past_sampling_snapped
-
-# # Summarise past WD sampling by wb.
-# wd_past_sampling_by_wb_list = wd_past_sampling |> 
-#   sf::st_join(wb_list |> dplyr::select(GNIS_NA, WATERSH))
-# 
-# # Which ones have doubled up?
-# wd_past_sampling_by_wb_list |> 
-#   dplyr::filter(duplicated(paste0(Site,Date))) |> 
-#   View()
-# wb_past_sampling_by_wb_list_summarised = wb_past_sampling_by_wb_list |> 
-#   dplyr::select(GNIS_NA, WATERSH, previous_sampling_result = Results) |> 
-#   sf::st_drop_geometry() |> 
-#   dplyr::mutate(previous_WD_sampling = TRUE) |> 
-#   dplyr::filter(!is.na(previous_sampling_result)) |> 
-#   dplyr::distinct()
-#   
-# wb_list = wb_list |> 
-#   dplyr::left_join(wb_past_sampling_by_wb_list_summarised) |> 
-#   dplyr::mutate(previous_WD_sampling = ifelse(is.na(previous_WD_sampling),FALSE,previous_WD_sampling))
-
-# Also pull in 2024 WD sampling results
-lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
-proj_wd = getwd()
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
-
-new_potential_dat_file = read_excel(paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"), sheet = "Fish and eDNA")
-local_data_file = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx')
-
-if(identical(names(new_potential_dat_file),names(local_data_file)) & nrow(new_potential_dat_file) == nrow(local_data_file)){
-  # print("New data file has identical column names and number of rows. Copying locally...")
-  file.copy(from = paste0(lan_folder,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx"),
-            to = paste0('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx'),
-            overwrite = T)
-}
-
-wd_results = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx', sheet = "Fish and eDNA") |> 
-  purrr::set_names(snakecase::to_snake_case)
-
-# Split 2024 results into sites with results and sites that were INTENDED to be sampled
-# but weren't in the end.
-wd_results_2024_sf = wd_results |> 
-  dplyr::filter(!is.na(lat)) |> 
-  sf::st_as_sf(coords = c("long","lat"), 
-                             crs = 4326) |> 
-  dplyr::select(Reach = reach, Site = sample_site_name, 
-                fish_sampling = fish_sampling_results_q_pcr_mc_detected, 
-                e_dna_results_mc, e_dna_results_tubifex) |> 
-  dplyr::filter(!is.na(fish_sampling) | 
-                !is.na(e_dna_results_mc) | 
-                !is.na(e_dna_results_tubifex))
-
-wd_not_sampled_2024_sf = wd_results |> 
-  dplyr::filter(!is.na(lat)) |> 
-  sf::st_as_sf(coords = c("long","lat"), 
-                             crs = 4326) |> 
-  #dplyr::filter(include_in_map_y_n == "Y") |> 
-  dplyr::mutate(on_list_but_not_sampled_2024 = T) |> 
-  dplyr::select(Reach = reach, Site = sample_site_name, on_list_but_not_sampled_2024)
-
-# Also, read in fras/col and do overlay.
-fras = sf::read_sf("W:/CMadsen/shared_data_sets/Fraser_River_Big_Watershed.shp")
-col = sf::read_sf("W:/CMadsen/shared_data_sets/Columbia_River_Big_Watershed.shp")
-
-fras_b = fras |> dplyr::summarise() |> dplyr::mutate(watershed = 'Fraser River')
-col_b = col |> dplyr::summarise() |> dplyr::mutate(watershed = 'Columbia River')
-
-frascol = dplyr::bind_rows(fras_b, col_b) |> 
-  sf::st_transform(4326)
-
-# i. 2017-2024 past WD sampling results.
-past_wd_monitoring_tbl = wd_past_sampling |> 
-  dplyr::mutate(WD_sampled_year = lubridate::year(Date)) |> 
-  dplyr::select(WD_sampled_year) |> 
-  sf::st_zm() |> 
-  sf::st_transform(4326)
-
-past_wd_monitoring_2024_tbl = wd_results_2024_sf |> 
-  dplyr::mutate(WD_sampled_year = 2024) |> 
-  dplyr::select(WD_sampled_year)
-
-past_wd_monitoring_tbl = dplyr::bind_rows(
-  past_wd_monitoring_tbl,
-  past_wd_monitoring_2024_tbl
-)
-
-# past_wd_monitoring_tbl_by_wb_list = past_wd_monitoring_tbl |> 
-#   sf::st_join(wb_list |> dplyr::select(GNIS_NA, WATERSH)) |> 
-#   dplyr::filter(!is.na(GNIS_NA)) |> 
-#   sf::st_drop_geometry() |> 
-#   dplyr::group_by(GNIS_NA, WATERSH) |> 
-#   dplyr::reframe(WD_sampled_year = paste0(unique(WD_sampled_year), collapse = ', '))
-# 
-# wb_list = wb_list |> 
-#   dplyr::left_join(past_wd_monitoring_tbl_by_wb_list)
-
-# ii. Is waterbody within Fraser or Columbia rivershed?
-wb_list = sf::st_transform(wb_list, 4326)
-
-wb_list = wb_list |> 
-  sf::st_join(frascol) |> 
-  dplyr::mutate(watershed = ifelse(is.na(watershed),"Other Watershed",watershed))
+```{r keep_top_priority_column_by_waterbody_name_and_ID}
+# This is the code chunk i need to work in
+wb_list |> 
+  sf::st_drop_geometry() |> 
+  dplyr::count(GNIS_NA, BLK)
 ```
 
 ### Table of All Waterbodies with Data
@@ -1932,18 +622,6 @@ wb_sara_in_frascol_idigenous = wb_list_final |>
   dplyr::filter(Indigenous_priority == TRUE)
 wb_sara_in_frascol_nonindigenous = wb_list_final |>
   dplyr::filter(Indigenous_priority == FALSE)
-
-# wb_list |> 
-#   st_drop_geometry() |> 
-#   group_by(priority) |> 
-#   summarise(n = n()) 
-# 
-# wb_list_final |>  
-#   st_drop_geometry() |> 
-#   group_by(priority) |> 
-#   summarise(n = n()) 
-
-
 ```
 
 
@@ -1965,130 +643,13 @@ openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_wat
 ```
 
 ```{r fig.width = 9, fig.height = 6}
-### Leaflet Map - Provincial Risk
-library(leaflet)
-
-priority_pal = colorNumeric("viridis", domain = wb_list$priority)
-wb_list$priority = as.numeric(wb_list$priority) 
-
-wb_list_over_3 <- wb_list |> filter(priority > 3)
-
-priority_vals <- sort(unique(wb_list_over_3$priority))
-
-m <- leaflet() |>
-  addTiles(group = 'openStreetMap') |>
-  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB')
-
-# Add a polygon layer for each priority value
-for (p in priority_vals) {
-  wb_subset <- wb_list_over_3 |> filter(priority == p)
-
-  m <- m |> addPolygons(
-    data = wb_subset,
-    label = ~paste0(GNIS_NA, " (priority ", priority, ")"),
-    fillColor = ~priority_pal(priority),
-    fillOpacity = 0.8,
-    color = "#333333",
-    weight = 1,
-    group = paste0("Priority ", p),
-    popup = leafpop::popupTable(
-      wb_subset |> st_drop_geometry() |> 
-        select(GNIS_NA, susceptible_spp, SARA, stocked_species, known_fish_occs, boats_inside_BC_bin, boats_entering_BC_bin, days_fished_bin, priority)
-    )
-  )
-}
-
-
-# Add layer controls to toggle each priority level
-m <- m |> addLayersControl(
-  position = 'bottomleft',
-  overlayGroups = paste0("Priority ", priority_vals),
-  options = layersControlOptions(collapsed = FALSE)
-)
-
-# Optionally add legend
-m <- m |> addLegend(
-  pal = priority_pal,
-  values = wb_list$priority,
-  title = "Priority",
-  position = "topright"
-)
-
-# Add reset map button
-m = m |> 
-  leaflet.extras::addResetMapButton() |> 
-  leaflet.extras::addSearchFeatures(
-    targetGroups = c(paste0("Priority ",priority_vals)),
-    options = leaflet.extras::searchFeaturesOptions(
-      zoom=8, openPopup = TRUE, firstTipSubmit = TRUE,
-      autoCollapse = F, hideMarkerOnCollapse = TRUE,
-    ))
-
-# m
-
+source("utils/chunk_leaflet_map_all_wbs_but_not_shown.R")
 ```
 
 ### Priority Waterbodies with SARA Overlaps
 
 ```{r}
-
-priority_pal = colorNumeric("viridis", domain = wb_list_SARA$priority)
-
-priority_vals <- sort(unique(wb_list_SARA$priority))
-
-priority_vals = priority_vals[priority_vals > 3]
-
-m <- leaflet() |>
-  addTiles(group = 'openStreetMap') |>
-  addProviderTiles(provider = providers$CartoDB, group = 'cartoDB')
-
-# Add a polygon layer for each priority value
-for (p in priority_vals) {
-  if(p < 5) next
-  wb_subset <- wb_list_SARA |> filter(priority == p)
-
-  m <- m |> addPolygons(
-    data = wb_subset,
-    label = ~paste0(GNIS_NA, " (priority ", priority, ")"),
-    fillColor = ~priority_pal(priority),
-    fillOpacity = 0.8,
-    color = "#333333",
-    weight = 1,
-    group = paste0("Priority ", p),
-    popup = leafpop::popupTable(
-      wb_subset |> st_drop_geometry() |> 
-        select(GNIS_NA, susceptible_spp, SARA, stocked_species, known_fish_occs, boats_inside_BC_bin, boats_entering_BC_bin, days_fished_bin, priority)
-    )
-  )
-}
-
-
-# Add layer controls to toggle each priority level
-m <- m |> addLayersControl(
-  position = 'bottomleft',
-  overlayGroups = paste0("Priority ", priority_vals),
-  options = layersControlOptions(collapsed = FALSE)
-)
-
-# Optionally add legend
-m <- m |> addLegend(
-  pal = priority_pal,
-  values = wb_list_SARA$priority,
-  title = "Priority",
-  position = "topright"
-)
-
-# Add reset map button
-m = m |> 
-  leaflet.extras::addResetMapButton() |> 
-  leaflet.extras::addSearchFeatures(
-    targetGroups = c(paste0("Priority ",priority_vals)),
-    options = leaflet.extras::searchFeaturesOptions(
-      zoom=8, openPopup = TRUE, firstTipSubmit = TRUE,
-      autoCollapse = F, hideMarkerOnCollapse = TRUE,
-    ))
-
-m
+source("utils/chunk_leaflet_map_SARA_overlap.R")
 ```
 
 ### Whirling Disease Sampling with Waterbodies
@@ -2096,142 +657,6 @@ m
 This map shows the listed top 100 priority waterbodies:
 
 ```{r}
-
-# Prep leaflet map
-years_sampled = c(unique(as.character(lubridate::year(wd_past_sampling$Date))),'2024',"not sampled 2024")
-
-my_pal = leaflet::colorFactor(palette = 'Spectral',
-                              domain = years_sampled)
-
-
-
-
-
-l = leaflet() |> 
-  addTiles() |> 
-  addLayersControl(
-    position = 'bottomleft',
-    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "First Nations priority"),
-    options = layersControlOptions(collapsed = FALSE)
-  )
-
-for(i in 1:length(years_sampled)){
-  the_year = years_sampled[i]
-  if(the_year == "not sampled 2024") next
-  if(the_year == '2024'){
-    the_dat = wd_results_2024_sf
-  } else {
-    the_dat = wd_past_sampling |> 
-        dplyr::mutate(year = lubridate::year(Date)) |> 
-        dplyr::filter(year == the_year) |> 
-      sf::st_transform(4326)
-  }
-  
-  l = l |> 
-    addMapPane(name = as.character(the_year), zIndex = (230 + i*30)) |>
-    addCircleMarkers(
-      data = the_dat,
-      group = as.character(the_year),
-      options = pathOptions(pane = as.character(the_year)),
-      # fillColor = the_pal[i],
-      fillColor = my_pal(as.character(the_year)),
-      fillOpacity = 0.8,
-      color = 'black',
-      weight = 1,
-      radius = 3,
-      label = ~paste0(Site, " (",Reach,")"),
-      popup = lapply(
-        leafpop::popupTable(the_dat |> sf::st_drop_geometry()),
-        htmltools::HTML
-      )
-    )
-}
-
-# Identify waterbodies that are within Fraser / Columbia watersheds and 
-# at or above priority 5.
-
-
-# wb_no_sara_over_5_in_frascol = wb_list_NoSARA[wb_list_NoSARA$priority >= 5,] |>
-#   sf::st_filter(frascol) |>
-#   dplyr::filter(!duplicated(GNIS_NA))
-# 
-# wb_sara_over_5_in_frascol = wb_list_SARA[wb_list_SARA$priority >= 5,] |>
-#   sf::st_filter(frascol) |>
-#   dplyr::filter(!duplicated(GNIS_NA))
-  
-
-
-l |> 
-  addMapPane(name = 'waterbodies', zIndex = 230) |> 
-  addPolygons(
-    data = wb_no_sara_over_5_in_frascol,
-    fillColor = 'purple',
-    color = 'purple',
-    label = ~paste0(GNIS_NA, "; priority rank ", priority),
-    group = "SARA absent"
-  ) |> 
-  addMapPane(name = 'waterbodies', zIndex = 260) |> 
-  addPolygons(
-    data = wb_sara_over_5_in_frascol,
-    fillColor = 'blue',
-    color = 'blue',
-    label = ~paste0(GNIS_NA, "; priority rank ", priority),
-    group = "SARA present",
-    popup = leafpop::popupTable(
-      wb_sara_over_5_in_frascol,
-      zcol = c("SARA")  
-    )
-  )|> 
-  addMapPane(name = 'waterbodies', zIndex = 300) |> 
-  addPolygons(
-    data = wb_sara_in_frascol_idigenous,
-    fillColor = 'lightblue',
-    color = 'lightblue',
-    label = ~paste0(GNIS_NA, "; priority rank ", priority),
-    group = "First Nations priority",
-    popup = leafpop::popupTable(
-      wb_sara_over_5_in_frascol,
-      zcol = c("SARA")  
-    )
-  )|>
-  
-  addMapPane(name = 'frascol', zIndex = 200) |> 
-  addPolygons(
-    data = frascol,
-    label = ~paste0(watershed," Watershed"),
-    fillColor = 'grey',
-    fillOpacity = 0.25,
-    weight = 1,
-    color = 'black',
-    options = pathOptions(pane = 'frascol')
-  ) |> 
-  addMapPane(name = 'frascol', zIndex = 200) |> 
-  addPolygons(
-    data = frascol,
-    label = ~paste0(watershed," Watershed"),
-    fillColor = 'grey',
-    fillOpacity = 0.25,
-    weight = 1,
-    color = 'black',
-    options = pathOptions(pane = 'frascol')
-  ) |> 
-  addMapPane(name = "not sampled 2024", zIndex = (600)) |> 
-  addCircleMarkers(
-    data = wd_not_sampled_2024_sf,
-    label = ~paste0(Site, " (",Reach,")"),
-    options = pathOptions(pane = "not sampled 2024"),
-    group = "not sampled 2024",
-    fillColor = my_pal("not sampled 2024"),
-    fillOpacity = 0.8,
-    radius = 3,
-    color = 'black',
-    weight = 1
-  ) |> 
-  addLegend(position = 'topright', title = "WD Sampling History", pal = my_pal, values = years_sampled) |>
-  addLegend(position = "bottomright", title = "Waterbodies",
-            colors = c("blue", "purple"),
-            labels = c("SARA present", "SARA absent"),
-            opacity = 1)
-
+source('utils/chunk_final_leaflet_top_100_wbs.R')
 ```
 
