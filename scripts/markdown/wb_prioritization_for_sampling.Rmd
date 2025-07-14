@@ -2111,7 +2111,7 @@ l = leaflet() |>
   addTiles() |> 
   addLayersControl(
     position = 'bottomleft',
-    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "Indigenous priority"),
+    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "First Nations priority"),
     options = layersControlOptions(collapsed = FALSE)
   )
 
@@ -2188,7 +2188,7 @@ l |>
     fillColor = 'lightblue',
     color = 'lightblue',
     label = ~paste0(GNIS_NA, "; priority rank ", priority),
-    group = "Indigenous priority",
+    group = "First Nations priority",
     popup = leafpop::popupTable(
       wb_sara_over_5_in_frascol,
       zcol = c("SARA")  
