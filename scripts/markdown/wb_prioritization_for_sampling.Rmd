@@ -742,12 +742,16 @@ wb_list = wb_list |>
 
 ### Water Authorizations
 
+This layer is filtered for the names of MOTT technicians to zoom in on just those water authorizations related to MOTT maintenance projects (as opposed to water authorizations for on-site use, e.g. residential areas). The list includes the following names: Lyndsey, Duane, Mai-Linh, and Kristin. We need to get the last names from Grahame to be more precise (multiple Kristins in dataset).
+
 ```{r snag_water_auths}
 if(!file.exists('data/water_authorization_points.rds')){
-  water_apps = bcdc_query_geodata('water-approval-points') |> 
-    # filter(INTERSECTS(wsg)) |> 
-    collect()
+  # water_apps = bcdc_query_geodata('water-approval-points') |> 
+  #   # filter(INTERSECTS(wsg)) |> 
+  #   collect()
+  water_apps = sf::read_sf("W:/CMadsen/shared_data_sets/water_sustainability_act_approvals_section_10_and_11.shp")
   water_apps = sf::st_filter(water_apps, bcmaps::bc_bound())
+  water_apps = water_apps |> dplyr::filter(stringr::str_detect(WSD_TECHNI, "(Lyndsey|Duane|Mai-Linh|Kristin)"))
   saveRDS(water_apps,'data/water_authorization_points.rds')
 } else {
   water_apps = readRDS('data/water_authorization_points.rds')
@@ -755,8 +759,8 @@ if(!file.exists('data/water_authorization_points.rds')){
 
 water_apps = water_apps |> 
   dplyr::mutate(approval_status = dplyr::case_when(
-    APPROVAL_STATUS %in% c("Abandoned","Aborted","Cancelled") ~ "Abandoned/Cancelled",
-    T ~ APPROVAL_STATUS
+    APPROVAL_S %in% c("Abandoned","Aborted","Cancelled") ~ "Abandoned/Cancelled",
+    T ~ APPROVAL_S
   ))
 
 library(leaflet)
@@ -841,7 +845,13 @@ if(!interactive()){
 wb_list = wb_list |> 
   dplyr::left_join(number_water_apps_per_wb) |> 
   dplyr::mutate(active_water_authorizations = tidyr::replace_na(active_water_authorizations, 0))
+
+water_apps |> 
+  sf::st_drop_geometry() |> 
+  dplyr::count(WSD_TECHNI, sort = T, name = 'number of rows') |> 
+  knitr::kable()
 ```
+
 
 If we only take Water Authorization points of status type 'Current' and drop all the rest, there are `r nrow(water_apps |> dplyr::filter(approval_status == 'Current'))` points to consider; `r nrow(water_apps_w_wb_info |> dplyr::filter(!is.na(GNIS_NA)))` of these overlap with one of the waterbodies with at least one watercraft inspection tied to it or at least one mention of it in the angler survey data.
 
