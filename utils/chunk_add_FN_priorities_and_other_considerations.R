@@ -1,5 +1,5 @@
 wb_list = wb_list |>
-  dplyr::mutate(other_priority_species = NA, opportunistic_sampling = FALSE)
+  dplyr::mutate(other_priority_species = NA, opportunistic_sampling = NA)
 
 list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Creek",
                   "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
@@ -10,7 +10,7 @@ list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Cree
 
 # first, see if the the wbs in list_nations is already present in wb_list
 wb_list<-wb_list |>
-  dplyr::mutate(Indigenous_priority = ifelse(GNIS_NA %in% list_nations, TRUE, FALSE))
+  dplyr::mutate(Flagged_by_FN_partners = ifelse(GNIS_NA %in% list_nations, TRUE, FALSE))
 
 #for the ones that have not been found
 list_nations <- list_nations[!list_nations %in% wb_list$GNIS_NA]
@@ -96,13 +96,13 @@ nations_priorities <- nations_wb |>
            ) |>
   summarise(geometry = st_union(geometry), .groups = "drop")
 
-#lets add the nations_priorities to the wb_list and change the Indigenous_priority to TRUE for the new entries
+#lets add the nations_priorities to the wb_list and change the Flagged_by_FN_partners to TRUE for the new entries
 nations_priorities <- st_transform(nations_priorities, st_crs(wb_list))
 
 wb_list <- wb_list |>
   dplyr::bind_rows(
     nations_priorities |>
-      dplyr::mutate(Indigenous_priority = TRUE)
+      dplyr::mutate(Flagged_by_FN_partners = TRUE)
   )
 
 still_missing <- list_nations[!list_nations %in% wb_list$GNIS_NA]

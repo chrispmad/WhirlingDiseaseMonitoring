@@ -268,6 +268,7 @@ wb_list = wb_list |>
 MaxEnt uses environmental variables to assess suitable habitat for a species, basedon their known locations. For Tubifex, we used carbon, conductivity, nitrates, oxygen, turbidity and slope as potential predictors. The model then predicts how suitable habitat is across the province, based on these variables and the known locations of Tubifex.
 
 The model predicted the following variables to contribute to habitat suitability for Tubifex:
+
 ```{r tubifex contributions}
 tub_contributions<-readRDS("output/contributions_tubifex_maxent.rds")
 
@@ -278,7 +279,7 @@ kableExtra::kable(tub_contributions, format = "html", caption = "Tubifex MaxEnt 
 
 The response curves show the relationship between the predictors and the predicted suitability for Tubifex. The x-axis represents the predictor variable, while the y-axis shows the predicted suitability score. The shaded area indicates the range of values for that predictor variable in the training data.
 
-![Response curves for Tubifex](output/response_curves_tubifex_maxent.png)
+![Response curves for Tubifex](../../output/response_curves_tubifex_maxent.png)
 
 These variables and their contributions are used to assess the relative suitability of habitat across the province. 1 is the highest suitability, with 0 being lowest. This does not mean that Tubifex is present in all areas with a value of 1, but rather that the habitat is more suitable for Tubifex presence.
 
@@ -433,6 +434,7 @@ wb_list = wb_list |>
 ```
 
 Monthly temperature rasters:
+
 ```{r}
 monthly_temp_rast_list |> 
   purrr::map(~ {
@@ -493,26 +495,44 @@ wb_list = wb_list |>
 ### First Nations listed priority waterbodies
 
 The listed waterbodies provided were (in no particular order):
-- Dutch Creek  
-- Windermere Creek  
-- Luxor Creek  
-- Galena Creek  
-- Slocan Lake  
-- Lower Kootenay River (how to do "lower"?)
-- Lower Columbia River (how to do "lower"?)  
-- Arrow Lake  
-- Okanagan Lake  
-- Skaha Lake  
-- Vasseux Lake  
-- Osoyoos Lake  
-- Okanagan River
-- Slocan River
-- Duncan Dam (fish weir) = Is this Duncan Lake?
-- Moyie Lake (at the lake outflow (near Eagles nest golf course))
--	Boat launch area in Castlegar (Columbia and Kootenay River?)
-- Beaver Creek Provincial Park in Trail (Columbia River?)
-- Trail boat launch (Columbia River?)
 
+-   Dutch Creek
+
+-   Windermere Creek
+
+-   Luxor Creek
+
+-   Galena Creek
+
+-   Slocan Lake
+
+-   Lower Kootenay River (how to do "lower"?)
+
+-   Lower Columbia River (how to do "lower"?)
+
+-   Arrow Lake
+
+-   Okanagan Lake
+
+-   Skaha Lake
+
+-   Vasseux Lake
+
+-   Osoyoos Lake
+
+-   Okanagan River
+
+-   Slocan River
+
+-   Duncan Dam (fish weir) = Is this Duncan Lake?
+
+-   Moyie Lake (at the lake outflow (near Eagles nest golf course))
+
+-   Boat launch area in Castlegar (Columbia and Kootenay River?)
+
+-   Beaver Creek Provincial Park in Trail (Columbia River?)
+
+-   Trail boat launch (Columbia River?)
 
 ```{r other_considerations}
 source("utils/chunk_add_FN_priorities_and_other_considerations.R", local = T)
@@ -575,18 +595,18 @@ wb_list_NoSARA = wb_list |>
 
 ```{r make_reduced_list}
 
-# we want to take the wb_list, and then get the top 100 unique named wbs, ordered by priority and Indigenous_priority
+# we want to take the wb_list, and then get the top 100 unique named wbs, ordered by priority and Flagged_by_FN_partners
 
 # wb_names_unique <- wb_list |>
 #   st_drop_geometry() |>
-#   dplyr::select(GNIS_NA, Indigenous_priority, priority) |>
+#   dplyr::select(GNIS_NA, Flagged_by_FN_partners, priority) |>
 #   dplyr::distinct()
 #
 # indig_names <- wb_names_unique |>
-#   filter(Indigenous_priority == TRUE)
+#   filter(Flagged_by_FN_partners == TRUE)
 # 
 # non_indig_names <- wb_names_unique |>
-#   filter(Indigenous_priority == FALSE) |>
+#   filter(Flagged_by_FN_partners == FALSE) |>
 #   arrange(desc(priority)) |>
 #   slice_head(n = 100 - nrow(indig_names))
 # 
@@ -596,7 +616,7 @@ wb_list_NoSARA = wb_list |>
 # wb_list_reduced <- wb_list |>
 #   filter(GNIS_NA %in% top_100_names) |>
 #   dplyr::select(
-#     GNIS_NA, WATERSH, priority, Indigenous_priority,
+#     GNIS_NA, WATERSH, priority, Flagged_by_FN_partners,
 #     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
 #     active_water_auths_bin, susceptible_spp, SARA
 #   ) |>
@@ -605,23 +625,23 @@ wb_list_NoSARA = wb_list |>
 wb_list_reduced <- wb_list |> 
   arrange(desc(priority)) |> 
   dplyr::select(
-    GNIS_NA, WATERSH, priority, Indigenous_priority,
+    GNIS_NA, WATERSH, priority, Flagged_by_FN_partners,
     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
-    active_water_auths_bin, susceptible_spp, SARA, watershed
+    active_water_auths_bin, susceptible_spp, SARA, opportunistic_sampling, watershed
   ) |> 
   dplyr::distinct() |> 
   dplyr::distinct(GNIS_NA, .keep_all = TRUE)
 
 indig_wbs <- wb_list_reduced |> 
-  filter(Indigenous_priority == TRUE)
+  filter(Flagged_by_FN_partners == TRUE)
 
 remaining_wbs <- wb_list_reduced |> 
-  filter(Indigenous_priority == FALSE) |> 
+  filter(Flagged_by_FN_partners == FALSE) |> 
   arrange(desc(priority)) |> 
   slice_head(n = 100 - nrow(indig_wbs))
 
-wb_list_final <- bind_rows(indig_wbs, remaining_wbs) |> 
-  arrange(desc(Indigenous_priority), desc(priority))
+wb_list_final <- bind_rows(indig_wbs, remaining_wbs |> dplyr::mutate(Flagged_by_FN_partners = NA)) |> 
+  arrange(desc(Flagged_by_FN_partners), desc(priority))
 
 # For the leaflet map
 wb_no_sara_over_5_in_frascol = wb_list_final |> 
@@ -635,11 +655,10 @@ wb_sara_over_5_in_frascol = wb_list_final |>
   dplyr::filter(!duplicated(GNIS_NA))
 
 wb_sara_in_frascol_idigenous = wb_list_final |> 
-  dplyr::filter(Indigenous_priority == TRUE)
+  dplyr::filter(Flagged_by_FN_partners == TRUE)
 wb_sara_in_frascol_nonindigenous = wb_list_final |>
-  dplyr::filter(Indigenous_priority == FALSE)
+  dplyr::filter(Flagged_by_FN_partners == FALSE)
 ```
-
 
 ```{r write_out_results_to_excel_file}
 my_wb = openxlsx::createWorkbook()
@@ -679,4 +698,3 @@ source('utils/chunk_final_leaflet_top_100_wbs.R')
 
 l_top_100
 ```
-
