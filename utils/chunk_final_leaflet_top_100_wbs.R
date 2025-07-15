@@ -8,7 +8,7 @@ l = leaflet() |>
   addTiles() |>
   addLayersControl(
     position = 'bottomleft',
-    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "First Nations priority"),
+    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "FN Listed WBs", "FN Listed WBs w SARA"),
     options = layersControlOptions(collapsed = FALSE)
   )
 
@@ -44,52 +44,55 @@ for(i in 1:length(years_sampled)){
     )
 }
 
-# Identify waterbodies that are within Fraser / Columbia watersheds and
-# at or above priority 5.
-
-
-# wb_no_sara_over_5_in_frascol = wb_list_NoSARA[wb_list_NoSARA$priority >= 5,] |>
-#   sf::st_filter(frascol) |>
-#   dplyr::filter(!duplicated(GNIS_NA))
-#
-# wb_sara_over_5_in_frascol = wb_list_SARA[wb_list_SARA$priority >= 5,] |>
-#   sf::st_filter(frascol) |>
-#   dplyr::filter(!duplicated(GNIS_NA))
-
-
 l = l |>
-  addMapPane(name = 'waterbodies', zIndex = 230) |>
+  addMapPane(name = 'waterbodies_no_sara', zIndex = 230) |>
   addPolygons(
     data = wb_no_sara_over_5_in_frascol,
     fillColor = 'purple',
     color = 'purple',
-    label = ~paste0(GNIS_NA, "; priority rank ", priority),
-    group = "SARA absent"
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
+    group = "SARA absent",
+    options = pathOptions(pane = 'waterbodies_no_sara')
   ) |>
-  addMapPane(name = 'waterbodies', zIndex = 260) |>
+  addMapPane(name = 'waterbodies_sara_overlap', zIndex = 260) |>
   addPolygons(
     data = wb_sara_over_5_in_frascol,
     fillColor = 'blue',
     color = 'blue',
-    label = ~paste0(GNIS_NA, "; priority rank ", priority),
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
     group = "SARA present",
+    options = pathOptions(pane = 'waterbodies_sara_overlap'),
     popup = leafpop::popupTable(
       wb_sara_over_5_in_frascol,
       zcol = c("SARA")
     )
   )|>
-  addMapPane(name = 'waterbodies', zIndex = 300) |>
+  addMapPane(name = 'waterbodies_list_no_sara', zIndex = 300) |>
   addPolygons(
-    data = wb_sara_in_frascol_idigenous,
+    data = wb_sara_in_frascol_idigenous  |> dplyr::filter(is.na(SARA)),
     fillColor = 'gold',
     color = 'gold',
-    label = ~paste0(GNIS_NA, "; priority rank ", priority),
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
     group = "First Nations priority",
+    options = pathOptions(pane = 'waterbodies_list_no_sara'),
     popup = leafpop::popupTable(
       wb_sara_over_5_in_frascol,
       zcol = c("SARA")
     )
   )|>
+  addMapPane(name = 'waterbodies_list_sara', zIndex = 330) |>
+  addPolygons(
+    data = wb_sara_in_frascol_idigenous |> dplyr::filter(!is.na(SARA)),
+    fillColor = 'green',
+    color = 'green',
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
+    group = "FN Listed WBs w SARA",
+    options = pathOptions(pane = 'waterbodies_list_sara'),
+    popup = leafpop::popupTable(
+      wb_sara_over_5_in_frascol,
+      zcol = c("SARA")
+    )
+  ) |>
   addMapPane(name = 'frascol', zIndex = 200) |>
   addPolygons(
     data = frascol,
@@ -124,8 +127,8 @@ l = l |>
   ) |>
   addLegend(position = 'topright', title = "WD Sampling History", pal = my_pal, values = years_sampled) |>
   addLegend(position = "bottomright", title = "Waterbodies",
-            colors = c("blue", "purple","gold"),
-            labels = c("SARA present", "SARA absent", "FN Priority"),
+            colors = c("blue", "purple","gold","green"),
+            labels = c("SARA present", "SARA absent", "FN Priority","FN Priority SARA"),
             opacity = 1)
 
 l_top_100 = l

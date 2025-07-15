@@ -636,12 +636,12 @@ wb_list_NoSARA = wb_list |>
 wb_list_reduced <- wb_list |> 
   arrange(desc(priority)) |> 
   dplyr::select(
-    GNIS_NA, WATERSH, priority, Flagged_by_FN_partners,
+    GNIS_NA, WATERSH, WATERSH_NAME, priority, Flagged_by_FN_partners,
     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
     active_water_auths_bin, susceptible_spp, SARA, opportunistic_sampling, watershed, tubifex_habitat_suitability,sampled_2024
-  ) |> 
-  dplyr::distinct() |> 
-  dplyr::distinct(GNIS_NA, .keep_all = TRUE)
+  ) #|> 
+  # dplyr::distinct() |> 
+  # dplyr::distinct(GNIS_NA, .keep_all = TRUE)
 
 indig_wbs <- wb_list_reduced |> 
   filter(Flagged_by_FN_partners == TRUE)
