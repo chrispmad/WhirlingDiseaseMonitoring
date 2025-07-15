@@ -2,7 +2,7 @@ priority_pal = colorNumeric("viridis", domain = wb_list_SARA$priority)
 
 priority_vals <- sort(unique(wb_list_SARA$priority))
 
-priority_vals = priority_vals[priority_vals > 3]
+priority_vals = priority_vals[priority_vals > 4]
 
 m <- leaflet() |>
   addTiles(group = 'openStreetMap') |>
@@ -23,7 +23,7 @@ for (p in priority_vals) {
     group = paste0("Priority ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |>
-        select(GNIS_NA, susceptible_spp, SARA, stocked_species, known_fish_occs, boats_inside_BC_bin, boats_entering_BC_bin, days_fished_bin, priority)
+        select(GNIS_NA, susceptible_spp, SARA, stocked_species, boats_inside_BC_bin, boats_entering_BC_bin, days_fished_bin, priority)
     )
   )
 }
@@ -54,4 +54,4 @@ m = m |>
       autoCollapse = F, hideMarkerOnCollapse = TRUE,
     ))
 
-m
+m_sara_overlap = m

@@ -8,7 +8,8 @@ bins_title_bc = getKMeansBreaks(insp_from_wd_bc_wb_b$TotalInspections, k = k_bre
 
 # Plot showing binned numbers of watercraft headed to waterbodies in BC from infected states / provinces as well as infected waterbodies in BC.
 if(!interactive()){
-  ggplot() +
+  print(
+    ggplot() +
     geom_sf(data = bcmaps::bc_bound()) +
     geom_sf(data = insp_from_wd_bc_wb_b, aes(fill = TotalInspections_kmeans_bin ,
                                              col = TotalInspections_kmeans_bin )) +
@@ -16,6 +17,7 @@ if(!interactive()){
     scale_fill_brewer(palette = 'Spectral', direction = -1) +
     scale_color_brewer(palette = 'Spectral', direction = -1) +
     bin_info_labs(bins_title_bc)
+  )
 }
 # Identify any water bodies that aren't already in the list.
 new_wb_for_list = insp_from_wd_bc_wb_b |>

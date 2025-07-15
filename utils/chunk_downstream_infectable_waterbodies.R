@@ -15,14 +15,12 @@ downstream_infectable_waterbodies_no_geom = downstream_infectable_waterbodies |>
 
 openxlsx::write.xlsx(downstream_infectable_waterbodies_no_geom, file = "output/list_of_infectable_downstream_waterbodies.xlsx")
 
-DT::datatable(downstream_infectable_waterbodies_no_geom)
-
 wb_list_infectables = wb_list |>
   sf::st_filter(
     downstream_infectable_waterbodies
   ) |>
   dplyr::mutate(infectable = TRUE) |>
-  dplyr::select(infectable, GNIS_NA, WATERSH) |>
+  dplyr::select(infectable, GNIS_NA, WATERSH, WB_POLY_ID, BLK) |>
   sf::st_drop_geometry()
 
 wb_list = wb_list |>

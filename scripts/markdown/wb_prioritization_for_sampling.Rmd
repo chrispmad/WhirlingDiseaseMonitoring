@@ -38,9 +38,9 @@ source("utils/bin_info_labs_ggplot_preset.R")
 
 ```{r load_data}
 # Inspections for watercraft entering BC
-source("utils/bring_in_entering_BC_inspection_data.R")
+source("utils/bring_in_entering_BC_inspection_data.R", local = T)
 # Inspections for watercraft within BC
-source("utils/bring_in_within_BC_inspection_data.R")
+source("utils/bring_in_within_BC_inspection_data.R", local = T)
 
 # The above datasets are key in establishing which of BC's many, many waterbodies are in scope for the rest of the analysis (i.e., they define wb_list)
 
@@ -65,7 +65,7 @@ Where *P~w~* is the priority ranking of a given waterbody, EnteringBC~w~ is the 
 These are binned watercraft inspections originating from infected states or provinces, as well as from waterbodies in British Columbia (BC) that are infected with whirling disease. The bins represent the number of watercraft headed to BC waterbodies from infected states, provinces, or infected BC waterbodies.
 
 ```{r watercraft_insp_from_inf_areas}
-source("utils/chunk_inspections_entering_BC.R")
+source("utils/chunk_inspections_entering_BC.R", local = T)
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
@@ -75,7 +75,7 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 These are where boats are going when coming from infected BC waterbodies.
 
 ```{r watercraft_insp_from_inf_wbs_in_bc}
-source("utils/chunk_inspections_inside_BC.R")
+source("utils/chunk_inspections_inside_BC.R", local = T)
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
@@ -83,25 +83,25 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 ### 2023-2024 iSEA Fishing Days
 
 ```{r}
-source("utils/chunk_dfo_angler_survey_data.R")
+source("utils/chunk_dfo_angler_survey_data.R", local = T)
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
 
 ```{r kfo_filter}
-source("utils/chunk_kfo_species_lookup.R")
+source("utils/chunk_kfo_species_lookup.R", local = T)
 ```
 
 ### Watershed Groups with Fish Samples with WD
 
 ```{r}
-source("utils/chunk_watersheds_with_WD_in.R")
+source("utils/chunk_watersheds_with_WD_in.R", local = T)
 ```
 
 ### Connectivity of Infected Watersheds {.tabset}
 
 ```{r}
-source("utils/chunk_connectivity_of_connected_watersheds_outset.R")
+source("utils/chunk_connectivity_of_connected_watersheds_outset.R", local = T)
 ```
 
 The following tabs describe our analysis of infected watersheds and which neighbouring watersheds are downstream and hydrologically connected.
@@ -223,15 +223,23 @@ ggplot() +
 ### Downstream Infectable Waterbodies
 
 ```{r}
-source('utils/chunk_downstream_infectable_waterbodies.R')
+source('utils/chunk_downstream_infectable_waterbodies.R', local = T)
+DT::datatable(downstream_infectable_waterbodies_no_geom)
 ```
 
 ### Water Authorizations
 
-This layer is filtered for the names of MOTT technicians to zoom in on just those water authorizations related to MOTT maintenance projects (as opposed to water authorizations for on-site use, e.g. residential areas). The list includes the following names: Lyndsey, Duane, Mai-Linh, and Kristin. We need to get the last names from Grahame to be more precise (multiple Kristins in dataset).
+This layer is filtered for the names of MOTT technicians to zoom in on just those water authorizations related to MOTT maintenance projects (as opposed to water authorizations for on-site use, e.g. residential areas). The list includes the following names: Lyndsey Johnson, Mai-Linh Huynh, Kristin Charleton, and Duane Wells.
 
 ```{r snag_water_auths}
-source('utils/chunk_water_authorizations.R')
+source('utils/chunk_water_authorizations.R', local = T)
+
+l_water_auth
+
+water_apps |>
+  sf::st_drop_geometry() |>
+  dplyr::count(WSD_TECHNI, sort = T, name = 'number of rows') |>
+  knitr::kable()
 ```
 
 If we only take Water Authorization points of status type 'Current' and drop all the rest, there are `r nrow(water_apps |> dplyr::filter(approval_status == 'Current'))` points to consider; `r nrow(water_apps_w_wb_info |> dplyr::filter(!is.na(GNIS_NA)))` of these overlap with one of the waterbodies with at least one watercraft inspection tied to it or at least one mention of it in the angler survey data.
@@ -275,7 +283,7 @@ The response curves show the relationship between the predictors and the predict
 These variables and their contributions are used to assess the relative suitability of habitat across the province. 1 is the highest suitability, with 0 being lowest. This does not mean that Tubifex is present in all areas with a value of 1, but rather that the habitat is more suitable for Tubifex presence.
 
 ```{r tubifex_maxent_maps}
-source("utils/chunk_tubifex_plots.R")
+source("utils/chunk_tubifex_plots.R", local = T)
 ```
 
 ### Mining Sites
@@ -285,6 +293,7 @@ Current method: count number of mining sites within 5km of each waterbody.
 ```{r mines_across_BC, fig.width = 9, fig.height = 6}
 
 bcl = bcdata::bcdc_list()
+
 if(!file.exists("data/mining_bcdata_layer.rds")){
   mining = bcl[str_detect(bcl,"mine-")]
   
@@ -391,7 +400,7 @@ wb_list = wb_list |>
 We used Environmental Monitoring System database water chemistry analyte variables including dissolved oxygen (DO), dissolved organic carbon (DOC), phosphorous, nitrogen, as well as a measure of turbidity, to describe water quality conditions across B.C. To fill in spatial data gaps, we used an interpolation technique called 'kriging' that uses nearest-neighbour values to calculate intermediate values where necessary.
 
 ```{r water_quality_plots, fig.width=10, fig.height = 8}
-source("utils/chunk_water_quality_plots.R")
+source("utils/chunk_water_quality_plots.R", local = TRUE)
 ```
 
 ### Waterbody temperatures
@@ -443,11 +452,14 @@ viii. Overlay susceptible species occurrences (present/absent for each waterbody
 The species considered susceptible to whirling disease are:
 
 ```{r overlay_susceptible_species, fig.width = 8, fig.height = 6}
-source("utils/chunk_susceptible_species_overlay.R")
+source("utils/chunk_susceptible_species_overlay.R", local = T)
 ```
 
+### Stocked Species
+
 ```{r species_stocked_in_waterbodies}
-source("utils/chunk_stocked_species.R")
+source("utils/chunk_stocked_species.R", local = T)
+stocked_species_dt
 ```
 
 ```{r add_if_wb_was_sampled_in_2024}
@@ -459,7 +471,7 @@ wb_sampled_2024 = wb_list |>
       crs = 4326
     ) |> sf::st_transform(3005)
   ) |> 
-  dplyr::select(GNIS_NA, WATERSH) |> 
+  dplyr::select(GNIS_NA, WATERSH, BLK, WB_POLY_ID) |> 
   sf::st_drop_geometry() |> 
   dplyr::mutate(sampled_2024 = TRUE)
 
@@ -503,18 +515,22 @@ The listed waterbodies provided were (in no particular order):
 
 
 ```{r other_considerations}
-source("utils/chunk_add_FN_priorities_and_other_considerations.R")
+source("utils/chunk_add_FN_priorities_and_other_considerations.R", local = T)
 ```
 
 ```{r previous_wd_sampling_and_2024_identified_unsampled_sites, include=FALSE}
-source("utils/chunk_previously_sampled_and_unsampled_sites.R")
+source("utils/chunk_previously_sampled_and_unsampled_sites.R", local = T)
 ```
 
 ```{r keep_top_priority_column_by_waterbody_name_and_ID}
-# This is the code chunk i need to work in
-wb_list |> 
-  sf::st_drop_geometry() |> 
-  dplyr::count(GNIS_NA, BLK)
+# This is the code chunk i need to work in!
+
+# For every given combination of GNIS_NA, WATERSH, BLK, and WB_POLY_ID,
+# just retain the row with the highest priority.
+wb_list = wb_list |> 
+  dplyr::group_by(GNIS_NA, BLK, WB_POLY_ID) |> 
+  dplyr::slice_max(priority) |> 
+  dplyr::ungroup()
 ```
 
 ### Table of All Waterbodies with Data
@@ -631,11 +647,11 @@ openxlsx::addWorksheet(my_wb, "All Waterbodies")
 openxlsx::addWorksheet(my_wb, "SARA Overlaps")
 openxlsx::addWorksheet(my_wb, "Top 100 priority list")
 openxlsx::writeData(my_wb, "All Waterbodies", wb_list |> 
-  sf::st_drop_geometry())
+  sf::st_drop_geometry() |> dplyr::arrange(dplyr::desc(priority)))
 openxlsx::writeData(my_wb, "SARA Overlaps", wb_list_SARA |>
-  sf::st_drop_geometry())
+  sf::st_drop_geometry() |> dplyr::arrange(dplyr::desc(priority)))
 openxlsx::writeData(my_wb, "Top 100 priority list", wb_list_final |> 
-  sf::st_drop_geometry())
+  sf::st_drop_geometry() |> dplyr::arrange(dplyr::desc(priority)))
 openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
 openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
 openxlsx::setColWidths(my_wb, "Top 100 priority list", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
@@ -643,13 +659,15 @@ openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_wat
 ```
 
 ```{r fig.width = 9, fig.height = 6}
-source("utils/chunk_leaflet_map_all_wbs_but_not_shown.R")
+source("utils/chunk_leaflet_map_all_wbs_but_not_shown.R", local = T)
 ```
 
 ### Priority Waterbodies with SARA Overlaps
 
 ```{r}
-source("utils/chunk_leaflet_map_SARA_overlap.R")
+source("utils/chunk_leaflet_map_SARA_overlap.R", local = T)
+
+m_sara_overlap
 ```
 
 ### Whirling Disease Sampling with Waterbodies
@@ -658,5 +676,7 @@ This map shows the listed top 100 priority waterbodies:
 
 ```{r}
 source('utils/chunk_final_leaflet_top_100_wbs.R')
+
+l_top_100
 ```
 

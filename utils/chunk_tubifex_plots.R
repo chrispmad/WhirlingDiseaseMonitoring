@@ -77,5 +77,5 @@ if(length(tub_files) > 0){
     theme(legend.position = "right",
           plot.background = element_rect(fill = 'lightblue'))
 
-  p_2
+  print(p_2)
 }

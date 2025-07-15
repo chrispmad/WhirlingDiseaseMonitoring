@@ -37,7 +37,8 @@ fish_occs <- bind_rows(species_occs, .id = "species")
 # ggplot() + geom_sf(data = fish_occs[fish_occs$species == 'Rainbow_Trout',])
 
 if(!interactive()){
-  ggplot() +
+  print(
+    ggplot() +
     geom_sf(data = bc, color = "lightgrey") +
     geom_sf(data = fish_occs, aes(color = as.factor(Species)))+
     facet_wrap( ~ Species)+
@@ -45,6 +46,7 @@ if(!interactive()){
     labs(color = "Species") +
     ggthemes::theme_map()+
     theme(legend.position = "bottom")
+  )
 }
 
 # now is there an overlap of susceptible fish with the wb_list, for each species, new column with TRUE/FALSE for the species

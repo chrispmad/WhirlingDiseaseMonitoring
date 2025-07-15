@@ -24,14 +24,17 @@ fish_summary <- joined |>
     .groups = "drop"
   )
 
-new_wb_fish <- fish_summary |>
-  anti_join(
-    wb_list |> st_drop_geometry() |> select(GNIS_NA, WATERSH),
-    by = c("GNIS_NA", "WATERSH")
-  )
+# new_wb_fish <- fish_summary |>
+#   anti_join(
+#     wb_list |> st_drop_geometry() |> select(GNIS_NA, WATERSH),
+#     by = c("GNIS_NA", "WATERSH")
+#   )
 
-wb_fish_existing <- fish_summary |>
-  filter(paste0(WATERSH, GNIS_NA) %in% paste0(wb_list$WATERSH, wb_list$GNIS_NA))
+# wb_fish_existing <- fish_summary |>
+#   filter(paste0(WATERSH, GNIS_NA) %in% paste0(wb_list$WATERSH, wb_list$GNIS_NA))
 
-wb_list<- wb_list |>
-  left_join(wb_fish_existing |> st_drop_geometry(), by = c("GNIS_NA", "WATERSH"))
+wb_list <- wb_list |>
+  left_join(fish_summary |> st_drop_geometry(),
+            by = c("GNIS_NA", "WATERSH","WB_POLY_ID","BLK"))
+
+rm(joined); rm(kfo); rm(kfo_spp); rm(new_wb_for_list)

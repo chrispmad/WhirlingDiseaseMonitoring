@@ -6,14 +6,17 @@ ang$watershed = NULL
 
 binned_ang<-bin_to_kmeans(ang, "fishing_days" , k_breaks)
 bin_vals<-getKMeansBreaks(binned_ang$fishing_days, k = k_breaks)
+
 if(!interactive()){
-  ggplot() +
+  print(
+    ggplot() +
     geom_sf(data = bcmaps::bc_bound()) +
     geom_sf(data = binned_ang, aes(col = fishing_days_kmeans_bin, fill = fishing_days_kmeans_bin)) +
     scale_fill_brewer(palette = 'Spectral', direction = -1) +
     scale_color_brewer(palette = 'Spectral', direction = -1) +
     ggthemes::theme_map() +
     bin_info_labs(bin_vals,'Fishing Days')
+  )
 }
 
 binned_ang<-st_transform(binned_ang, st_crs(wb_list))

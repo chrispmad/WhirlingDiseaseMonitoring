@@ -26,7 +26,8 @@ ws_w_edna_fish = ws |>
 ws_bbox = sf::st_bbox(ws_w_edna_fish |> sf::st_buffer(dist = 50000))
 
 if(!interactive()){
-  ggplot() +
+  print(
+    ggplot() +
     geom_sf(data = bcmaps::bc_bound()) +
     geom_sf(data = ws_w_edna_fish, aes(fill = "Positive Fish \neDNA Results")) +
     geom_sf(data = pos_fish_edna_sf, col = 'lightgreen') +
@@ -41,6 +42,7 @@ if(!interactive()){
              ylim = ws_bbox[c(2,4)]) +
     ggthemes::theme_map() +
     ggspatial::annotation_scale()
+  )
 }
 
 wb_list = wb_list |>

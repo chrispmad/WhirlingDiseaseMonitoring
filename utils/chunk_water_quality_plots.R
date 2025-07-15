@@ -22,7 +22,7 @@ plot_list = 1:length(names(all_r)) |>
       ggthemes::theme_map()
   })
 
-patchwork::wrap_plots(plot_list)
+print(patchwork::wrap_plots(plot_list))
 
 bc_crs <- "EPSG:3005"
 all_r <- project(all_r, bc_crs, method = "near")
