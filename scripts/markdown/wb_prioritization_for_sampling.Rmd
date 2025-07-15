@@ -627,7 +627,8 @@ wb_list_reduced <- wb_list |>
   dplyr::select(
     GNIS_NA, WATERSH, priority, Flagged_by_FN_partners,
     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
-    active_water_auths_bin, susceptible_spp, SARA, opportunistic_sampling, watershed
+    active_water_auths_bin, susceptible_spp, SARA,
+    opportunistic_sampling,tubifex_habitat_suitability, watershed
   ) |> 
   dplyr::distinct() |> 
   dplyr::distinct(GNIS_NA, .keep_all = TRUE)
