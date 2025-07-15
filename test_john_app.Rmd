@@ -1,0 +1,55 @@
+---
+title: "RecSites"
+author: "JPhelan"
+date: "`r Sys.Date()`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    self_contained: true
+editor_options: 
+  chunk_output_type: console
+---
+
+# Page 1
+
+## Column 1
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+knitr::opts_chunk$set(echo = F, warning = F)
+library(bcdata)
+library(leaflet)
+library(stringr)
+```
+
+```{r grabbed_rec_sites}
+bcl = bcdata::bcdc_list()
+recsites = bcl[str_detect(bcl,'recreation-site')]
+reccies = bcdc_query_geodata(recsites[12]) |> collect()
+reccies = reccies |> sf::st_transform(4326)
+all_bc = bcmaps::nr_regions()
+wc = all_bc |> dplyr::filter(ORG_UNIT == 'RWC')
+wc = sf::st_transform(wc, 4326)
+reccies_wc = sf::st_filter(reccies, wc)
+```
+
+```{r attempt_to_get_tiles}
+library(prettymapr)
+```
+
+```{r}
+leaflet() |> 
+  addTiles() |> 
+  addCircleMarkers(
+    data = reccies,
+    popup = lapply(
+      leafpop::popupTable(
+      reccies |> sf::st_drop_geometry() |> 
+        dplyr::select(DEFINED_CAMPSITES,
+                      ORG_UNIT_NAME,
+                      SITE_LOCATION)),
+      htmltools::HTML)
+  )
+```
+
