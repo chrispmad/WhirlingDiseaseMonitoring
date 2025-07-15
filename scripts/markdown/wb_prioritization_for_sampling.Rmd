@@ -492,7 +492,7 @@ wb_list = wb_list |>
   dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
-### First Nations listed priority waterbodies
+### First Nations waterbody lists
 
 The listed waterbodies provided were (in no particular order):
 
