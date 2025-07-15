@@ -471,7 +471,8 @@ wb_sampled_2024 = wb_list |>
       wbs_sampled_2024,
       coords = c("long","lat"),
       crs = 4326
-    ) |> sf::st_transform(3005)
+    ) |> sf::st_transform(3005) |> 
+      sf::st_buffer(dist = 25)
   ) |> 
   dplyr::select(GNIS_NA, WATERSH, BLK, WB_POLY_ID) |> 
   sf::st_drop_geometry() |> 
@@ -492,7 +493,7 @@ wb_list = wb_list |>
   dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
-### First Nations waterbody lists
+### First Nations listed priority waterbodies
 
 The listed waterbodies provided were (in no particular order):
 
@@ -543,14 +544,22 @@ source("utils/chunk_previously_sampled_and_unsampled_sites.R", local = T)
 ```
 
 ```{r keep_top_priority_column_by_waterbody_name_and_ID}
-# This is the code chunk i need to work in!
+# # For every given combination of GNIS_NA, WATERSH, BLK, and WB_POLY_ID,
+# # just retain the row with the highest priority.
+# wb_list = wb_list |> 
+#   dplyr::group_by(GNIS_NA, BLK, WB_POLY_ID) |> 
+#   dplyr::slice_max(priority) |> 
+#   dplyr::ungroup()
+```
 
-# For every given combination of GNIS_NA, WATERSH, BLK, and WB_POLY_ID,
-# just retain the row with the highest priority.
+```{r add_sub_sub_watershed_name_to_wb_list}
+subw = sf::read_sf("W:/CMadsen/shared_data_sets/WatershedGroups_lowres.shp")
 wb_list = wb_list |> 
-  dplyr::group_by(GNIS_NA, BLK, WB_POLY_ID) |> 
-  dplyr::slice_max(priority) |> 
-  dplyr::ungroup()
+  dplyr::left_join(
+    subw |> sf::st_drop_geometry() |> dplyr::select(WATERSH = WATERSHED_,
+                                                    WATERSH_NAME = WATERSHE_1)
+  ) |> 
+  dplyr::select(GNIS_NA,WATERSH,WATERSH_NAME,dplyr::everything())
 ```
 
 ### Table of All Waterbodies with Data
@@ -572,6 +581,8 @@ wb_list = wb_list |>
   #               active_water_auths,active_water_auths_bin,
   #               priority,
   #               fish_edna_positive_in_watershed:infectable,tubifex_edna_positive_in_watershed:SARA,stocked_species,known_fish_occs)
+
+saveRDS(wb_list, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_waterbodies.rds"))
 ```
 
 ```{r show_results_data_table}
@@ -627,8 +638,7 @@ wb_list_reduced <- wb_list |>
   dplyr::select(
     GNIS_NA, WATERSH, priority, Flagged_by_FN_partners,
     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
-    active_water_auths_bin, susceptible_spp, SARA,
-    opportunistic_sampling,tubifex_habitat_suitability, watershed
+    active_water_auths_bin, susceptible_spp, SARA, opportunistic_sampling, watershed, tubifex_habitat_suitability,sampled_2024
   ) |> 
   dplyr::distinct() |> 
   dplyr::distinct(GNIS_NA, .keep_all = TRUE)
