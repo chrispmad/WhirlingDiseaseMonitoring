@@ -739,7 +739,9 @@ openxlsx::conditionalFormatting(my_wb, "SARA Overlaps", cols = which(names(wb_li
 openxlsx::conditionalFormatting(my_wb, "Top 100 priority list", cols = which(names(wb_list_final_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_list_final_for_excel), rule = "TRUE", style = highlight_style)
 
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
-openxlsx::saveWorkbook(my_wb, paste0("J:/2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
+
+file.copy(from = paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"),
+          to = paste0("J:/2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
 ```{r fig.width = 9, fig.height = 6}
