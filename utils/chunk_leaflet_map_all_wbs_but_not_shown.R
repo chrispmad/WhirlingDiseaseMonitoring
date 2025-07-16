@@ -1,12 +1,13 @@
 ### Leaflet Map - Provincial Risk
 library(leaflet)
 
-priority_pal = colorNumeric("viridis", domain = wb_list$priority)
-wb_list$priority = as.numeric(wb_list$priority)
+priority_pal = colorNumeric("viridis", domain = wb_nice_names$Priority)
 
-wb_list_over_3 <- wb_list |> filter(priority > 3)
+wb_nice_names$Priority = as.numeric(wb_nice_names$Priority)
 
-priority_vals <- sort(unique(wb_list_over_3$priority))
+wb_list_over_3 <- wb_nice_names |> filter(Priority > 3)
+
+priority_vals <- sort(unique(wb_list_over_3$Priority))
 
 m <- leaflet() |>
   addTiles(group = 'openStreetMap') |>
@@ -14,19 +15,25 @@ m <- leaflet() |>
 
 # Add a polygon layer for each priority value
 for (p in priority_vals) {
-  wb_subset <- wb_list_over_3 |> filter(priority == p)
+  wb_subset <- wb_list_over_3 |> filter(Priority == p)
 
   m <- m |> addPolygons(
     data = wb_subset,
-    label = ~paste0(GNIS_NA, " (priority ", priority, ")"),
-    fillColor = ~priority_pal(priority),
+    label = ~paste0(`Waterbody Name`, " (priority ", Priority, ")"),
+    fillColor = ~priority_pal(Priority),
     fillOpacity = 0.8,
     color = "#333333",
     weight = 1,
     group = paste0("Priority ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |>
-        select(GNIS_NA, susceptible_spp, SARA, stocked_species, known_fish_occs, boats_inside_BC_bin, boats_entering_BC_bin, days_fished_bin, priority)
+        select(`Waterbody Name`,
+               WD_susceptible_spp, SARA,
+               stocked_species,
+               `Boats inside BC (bins 1 - 5)`,
+               `Boats entering BC (bins 1 - 5)`,
+               `Days fished (bins 1 - 5)`,
+               Priority)
     )
   )
 }
@@ -42,7 +49,7 @@ m <- m |> addLayersControl(
 # Optionally add legend
 m <- m |> addLegend(
   pal = priority_pal,
-  values = wb_list$priority,
+  values = wb_nice_names$Priority,
   title = "Priority",
   position = "topright"
 )

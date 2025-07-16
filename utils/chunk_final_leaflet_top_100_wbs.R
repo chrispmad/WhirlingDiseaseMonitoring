@@ -8,7 +8,7 @@ l = leaflet() |>
   addTiles() |>
   addLayersControl(
     position = 'bottomleft',
-    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "FN Listed WBs", "FN Listed WBs w SARA"),
+    overlayGroups = c(years_sampled, "not sampled 2024", "SARA present", "SARA absent", "Identified by FN partners", "Identified by FN partners w/ SARA"),
     options = layersControlOptions(collapsed = FALSE)
   )
 
@@ -50,7 +50,7 @@ l = l |>
     data = wb_no_sara_over_5_in_frascol,
     fillColor = 'purple',
     color = 'purple',
-    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME," watershed)", "; priority rank ", priority),
     group = "SARA absent",
     options = pathOptions(pane = 'waterbodies_no_sara')
   ) |>
@@ -59,7 +59,7 @@ l = l |>
     data = wb_sara_over_5_in_frascol,
     fillColor = 'blue',
     color = 'blue',
-    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME," watershed)", "; priority rank ", priority),
     group = "SARA present",
     options = pathOptions(pane = 'waterbodies_sara_overlap'),
     popup = leafpop::popupTable(
@@ -72,8 +72,8 @@ l = l |>
     data = wb_sara_in_frascol_idigenous  |> dplyr::filter(is.na(SARA)),
     fillColor = 'gold',
     color = 'gold',
-    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
-    group = "First Nations priority",
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME," watershed)", "; priority rank ", priority),
+    group = "Identified by FN partners",
     options = pathOptions(pane = 'waterbodies_list_no_sara'),
     popup = leafpop::popupTable(
       wb_sara_over_5_in_frascol,
@@ -85,8 +85,8 @@ l = l |>
     data = wb_sara_in_frascol_idigenous |> dplyr::filter(!is.na(SARA)),
     fillColor = 'green',
     color = 'green',
-    label = ~paste0(GNIS_NA," (",WATERSH_NAME,")", "; priority rank ", priority),
-    group = "FN Listed WBs w SARA",
+    label = ~paste0(GNIS_NA," (",WATERSH_NAME," watershed)", "; priority rank ", priority),
+    group = "Identified by FN partners w/ SARA",
     options = pathOptions(pane = 'waterbodies_list_sara'),
     popup = leafpop::popupTable(
       wb_sara_over_5_in_frascol,
@@ -128,7 +128,7 @@ l = l |>
   addLegend(position = 'topright', title = "WD Sampling History", pal = my_pal, values = years_sampled) |>
   addLegend(position = "bottomright", title = "Waterbodies",
             colors = c("blue", "purple","gold","green"),
-            labels = c("SARA present", "SARA absent", "FN Priority","FN Priority SARA"),
+            labels = c("SARA present", "SARA absent", "Identified by FN","Identified by FN w/ SARA"),
             opacity = 1)
 
 l_top_100 = l

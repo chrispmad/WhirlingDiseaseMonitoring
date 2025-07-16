@@ -1,6 +1,6 @@
-priority_pal = colorNumeric("viridis", domain = wb_list_SARA$priority)
+priority_pal = colorNumeric("viridis", domain = wb_list_SARA_nice_names$Priority)
 
-priority_vals <- sort(unique(wb_list_SARA$priority))
+priority_vals <- sort(unique(wb_list_SARA_nice_names$Priority))
 
 priority_vals = priority_vals[priority_vals > 4]
 
@@ -11,19 +11,25 @@ m <- leaflet() |>
 # Add a polygon layer for each priority value
 for (p in priority_vals) {
   if(p < 5) next
-  wb_subset <- wb_list_SARA |> filter(priority == p)
+  wb_subset <- wb_list_SARA_nice_names |> filter(Priority == p)
 
   m <- m |> addPolygons(
     data = wb_subset,
-    label = ~paste0(GNIS_NA, " (priority ", priority, ")"),
-    fillColor = ~priority_pal(priority),
+    label = ~paste0(`Waterbody Name`, " (priority ", Priority, ")"),
+    fillColor = ~priority_pal(Priority),
     fillOpacity = 0.8,
     color = "#333333",
     weight = 1,
     group = paste0("Priority ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |>
-        select(GNIS_NA, susceptible_spp, SARA, stocked_species, boats_inside_BC_bin, boats_entering_BC_bin, days_fished_bin, priority)
+        select(`Waterbody Name`,
+               WD_susceptible_spp, SARA,
+               stocked_species,
+               `Boats inside BC (bins 1 - 5)`,
+               `Boats entering BC (bins 1 - 5)`,
+               `Days fished (bins 1 - 5)`,
+               Priority)
     )
   )
 }
@@ -39,7 +45,7 @@ m <- m |> addLayersControl(
 # Optionally add legend
 m <- m |> addLegend(
   pal = priority_pal,
-  values = wb_list_SARA$priority,
+  values = wb_list_SARA_nice_names$Priority,
   title = "Priority",
   position = "topright"
 )

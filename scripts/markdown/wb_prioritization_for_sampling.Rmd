@@ -573,7 +573,7 @@ wb_list = wb_list |>
                 days_fished_bin = days_fished_kmeans_bin,
                 active_water_auths = active_water_authorizations,
                 active_water_auths_bin = active_water_authorizations_kmeans_bin,
-                susceptible_spp = sus_spp,
+                WD_susceptible_spp = sus_spp,
                 SARA = sara,
                 known_fish_occs = known_fish
                 ) #|> 
@@ -597,7 +597,7 @@ wb_list |>
 wb_list<-st_transform(wb_list, 4326)
 
 wb_list_SARA = wb_list |> 
-  dplyr::filter(!is.na(SARA))
+  dplyr::filter(!is.na(SARA) | Flagged_by_FN_partners)
 
 wb_list_NoSARA = wb_list |> 
   dplyr::filter(is.na(SARA))
@@ -638,7 +638,7 @@ wb_list_reduced <- wb_list |>
   dplyr::select(
     GNIS_NA, WATERSH, WATERSH_NAME, priority, Flagged_by_FN_partners,
     boats_entering_BC_bin, boats_inside_BC_bin, days_fished_bin,
-    active_water_auths_bin, susceptible_spp, SARA, opportunistic_sampling, watershed, tubifex_habitat_suitability,sampled_2024
+    active_water_auths_bin, WD_susceptible_spp, SARA, opportunistic_sampling, tubifex_habitat_suitability,sampled_2024
   ) #|> 
   # dplyr::distinct() |> 
   # dplyr::distinct(GNIS_NA, .keep_all = TRUE)
@@ -671,21 +671,75 @@ wb_sara_in_frascol_nonindigenous = wb_list_final |>
   dplyr::filter(Flagged_by_FN_partners == FALSE)
 ```
 
+```{r update_column_names_for_excel_output}
+make_final_column_names = function(dat){
+  dat = dat |> 
+    sf::st_sf() |> 
+    dplyr::rename(`Waterbody Name` = GNIS_NA, 
+                `Watershed Code` = WATERSH,
+                `Watershed Name` = WATERSH_NAME,
+                `Identified by FN partners` = Flagged_by_FN_partners,
+                `Opportunisitic sampling (please insert name)` = opportunistic_sampling
+                )
+  if("BLK" %in% names(dat)){
+    dat = dat |> dplyr::select(-c(BLK,WB_POLY_ID,watershed))
+  }
+    dat |> 
+      dplyr::mutate(dplyr::across(dplyr::ends_with("_bin"), \(x) stringr::str_remove_all(x," \\(.*"))) |> 
+    dplyr::rename(`Boats entering BC (bins 1 - 5)` = boats_entering_BC_bin,
+                  `Boats inside BC (bins 1 - 5)` = boats_inside_BC_bin,
+                  `Days fished (bins 1 - 5)` = days_fished_bin,
+                  `Water authorizations (bins 1 - 5)` = active_water_auths_bin) |>
+      dplyr::mutate(`Identified by FN partners` = ifelse(!`Identified by FN partners`,NA,`Identified by FN partners`)) |> 
+      dplyr::select(`Waterbody Name`, `Watershed Code`, `Watershed Name`,
+                    Priority = priority, `Identified by FN partners`, dplyr::everything())
+}
+
+# To each cut of the data, apply the function that renames columns
+wb_nice_names = make_final_column_names(wb_list)
+wb_list_SARA_nice_names = make_final_column_names(wb_list_SARA)
+wb_list_final_nice_names = make_final_column_names(wb_list_final)
+```
+
 ```{r write_out_results_to_excel_file}
+
+highlight_style <- openxlsx::createStyle(bgFill = "#FFFF00")
+
+wb_for_excel = wb_nice_names |> sf::st_drop_geometry()
+wb_list_SARA_for_excel = wb_list_SARA_nice_names |> sf::st_drop_geometry()
+wb_list_final_for_excel = wb_list_final_nice_names |> sf::st_drop_geometry()
+
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "All Waterbodies")
 openxlsx::addWorksheet(my_wb, "SARA Overlaps")
 openxlsx::addWorksheet(my_wb, "Top 100 priority list")
-openxlsx::writeData(my_wb, "All Waterbodies", wb_list |> 
-  sf::st_drop_geometry() |> dplyr::arrange(dplyr::desc(priority)))
-openxlsx::writeData(my_wb, "SARA Overlaps", wb_list_SARA |>
-  sf::st_drop_geometry() |> dplyr::arrange(dplyr::desc(priority)))
-openxlsx::writeData(my_wb, "Top 100 priority list", wb_list_final |> 
-  sf::st_drop_geometry() |> dplyr::arrange(dplyr::desc(priority)))
-openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_list)-1)), widths = 'auto')
-openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
-openxlsx::setColWidths(my_wb, "Top 100 priority list", cols = c(1:(ncol(wb_list_SARA)-1)), widths = 'auto')
+openxlsx::writeData(my_wb, "All Waterbodies",
+                    wb_for_excel |> 
+                      dplyr::arrange(dplyr::desc(Priority)))
+
+openxlsx::writeData(my_wb, "SARA Overlaps", 
+                    wb_list_SARA_for_excel |>
+                      dplyr::arrange(dplyr::desc(Priority)))
+
+openxlsx::writeData(my_wb, "Top 100 priority list", 
+                    wb_list_final_for_excel |> 
+                      dplyr::arrange(dplyr::desc(Priority)))
+
+openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_for_excel)-1)), widths = 'auto')
+
+openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA_for_excel)-1)), widths = 'auto')
+
+openxlsx::setColWidths(my_wb, "Top 100 priority list", cols = c(1:(ncol(wb_list_final_for_excel)-1)), widths = 'auto')
+
+# Highlight opportunistic sampling column in all tabs
+openxlsx::conditionalFormatting(my_wb, "All Waterbodies", cols = which(names(wb_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_for_excel), rule = "TRUE", style = highlight_style)
+
+openxlsx::conditionalFormatting(my_wb, "SARA Overlaps", cols = which(names(wb_list_SARA_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_list_SARA_for_excel), rule = "TRUE", style = highlight_style)
+
+openxlsx::conditionalFormatting(my_wb, "Top 100 priority list", cols = which(names(wb_list_final_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_list_final_for_excel), rule = "TRUE", style = highlight_style)
+
 openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
+openxlsx::saveWorkbook(my_wb, paste0("J:/2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
 ```{r fig.width = 9, fig.height = 6}
@@ -694,7 +748,7 @@ source("utils/chunk_leaflet_map_all_wbs_but_not_shown.R", local = T)
 
 ### Priority Waterbodies with SARA Overlaps
 
-```{r}
+```{r  fig.width=10, fig.height = 8}
 source("utils/chunk_leaflet_map_SARA_overlap.R", local = T)
 
 m_sara_overlap
@@ -704,7 +758,7 @@ m_sara_overlap
 
 This map shows the listed top 100 priority waterbodies:
 
-```{r}
+```{r fig.width=10, fig.height = 8}
 source('utils/chunk_final_leaflet_top_100_wbs.R')
 
 l_top_100

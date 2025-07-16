@@ -92,7 +92,8 @@ wd_not_sampled_2024_sf = wd_results |>
   sf::st_as_sf(coords = c("long","lat"),
                crs = 4326) |>
   #dplyr::filter(include_in_map_y_n == "Y") |>
-  dplyr::mutate(on_list_but_not_sampled_2024 = T) |>
+  dplyr::mutate(on_list_but_not_sampled_2024 = sampled_in_2024_y_n == "N") |>
+  dplyr::filter(on_list_but_not_sampled_2024) |>
   dplyr::select(Reach = reach, Site = sample_site_name, on_list_but_not_sampled_2024)
 
 # Also, read in fras/col and do overlay.
