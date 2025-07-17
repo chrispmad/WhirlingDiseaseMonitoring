@@ -581,8 +581,6 @@ wb_list = wb_list |>
   #               active_water_auths,active_water_auths_bin,
   #               priority,
   #               fish_edna_positive_in_watershed:infectable,tubifex_edna_positive_in_watershed:SARA,stocked_species,known_fish_occs)
-
-saveRDS(wb_list, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_waterbodies.rds"))
 ```
 
 ```{r show_results_data_table}
@@ -699,6 +697,11 @@ make_final_column_names = function(dat){
 wb_nice_names = make_final_column_names(wb_list)
 wb_list_SARA_nice_names = make_final_column_names(wb_list_SARA)
 wb_list_final_nice_names = make_final_column_names(wb_list_final)
+```
+
+```{r write_out_data}
+saveRDS(wb_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_all_waterbodies.rds"))
+saveRDS(wb_list_final_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_100_waterbodies.rds"))
 ```
 
 ```{r write_out_results_to_excel_file}
