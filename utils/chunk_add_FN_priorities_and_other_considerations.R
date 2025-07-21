@@ -1,7 +1,7 @@
 wb_list = wb_list |>
   dplyr::mutate(other_priority_species = NA, opportunistic_sampling = NA)
 
-list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Galena Creek",
+list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Fraling Creek",
                   "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
                   "Columbia River", "Kootenay River",
                   "Okanagan Lake", "Skaha Lake", "Vaseux Lake", "Osoyoos Lake",
