@@ -125,7 +125,7 @@ clake <- data.frame(
   sf::st_as_sf(sf_column_name = "geom", crs = sf::st_crs(cultus_shape))
 
 
-test<-bind_rows(sara_sp, clake)
+sara_sp<-bind_rows(sara_sp, clake)
 
 
 sara_sp <- sf::st_transform(sara_sp, st_crs(wb_list))
