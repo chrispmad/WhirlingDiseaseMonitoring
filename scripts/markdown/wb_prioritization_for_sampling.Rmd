@@ -687,14 +687,28 @@ indig_wbs <- wb_list_reduced |>
 opp_sample_wbs = wb_list_reduced |> 
   filter(!is.na(opportunistic_sampling))
 
+# Where is there overlap between indig_wbs and opp_sample_wbs
+# join them based on gnis_na and watershed
+opp_sample_wbs_nogeo <- opp_sample_wbs |> st_drop_geometry()
+indig_wbs_nogeo <- indig_wbs |> st_drop_geometry()
+# Identify only those opp_sample_wbs rows that aren't already in indig_wbs by GNIS_NA + WATERSH
+opp_diff <- opp_sample_wbs |> 
+  semi_join(opp_sample_wbs_nogeo |> 
+              anti_join(indig_wbs_nogeo, by = c("GNIS_NA", "WATERSH")),
+            by = colnames(opp_sample_wbs_nogeo))
+
+# Combine indig_wbs with non-overlapping opp_sample_wbs rows
+nation_wbs <- bind_rows(indig_wbs, opp_diff)
+
+
+
 remaining_wbs <- wb_list_reduced |> 
   filter(is.na(Flagged_by_FN_partners)) |>
   filter(is.na(opportunistic_sampling)) |> 
   arrange(desc(priority)) |> 
-slice_head(n = 100 - (nrow(indig_wbs)))
+slice_head(n = 100 - (nrow(nation_wbs)))
 
-# NEED TO FIX #
-wb_list_final <- bind_rows(indig_wbs, 
+wb_list_final <- bind_rows(nation_wbs, 
                            remaining_wbs) |> 
   arrange(desc(Flagged_by_FN_partners),desc(opportunistic_sampling), desc(priority))
 

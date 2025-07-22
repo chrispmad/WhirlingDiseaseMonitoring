@@ -23,7 +23,11 @@ opportunistic_sampling = fn_feedback |>
                 ONA_OS = ifelse(!str_detect(ONA_OS,"^ONA_"),paste0("ONA_",ONA_OS),ONA_OS)) |>
   dplyr::distinct() |>
   dplyr::rowwise() |>
-  dplyr::mutate(opportunistic_sampling = paste0(na.omit(Ktunaxa_OS), na.omit(Shuswap_OS), na.omit(ONA_OS), collapse = ", ")) |>
+  #from chatgpt
+  mutate(opportunistic_sampling = pmap_chr(
+    list(Ktunaxa_OS, Shuswap_OS, ONA_OS),
+    ~ paste(na.omit(c(...)), collapse = ", ")
+  )) |> 
   dplyr::select(GNIS_NA,
                 WATERSH,
                 opportunistic_sampling) |>
