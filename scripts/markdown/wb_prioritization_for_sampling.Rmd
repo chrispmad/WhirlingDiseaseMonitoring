@@ -593,7 +593,7 @@ source("utils/chunk_previously_sampled_and_unsampled_sites.R", local = T)
 ```
 
 ```{r add_sub_sub_watershed_name_to_wb_list}
-subw = sf::read_sf("W:/CMadsen/shared_data_sets/WatershedGroups_lowres.shp")
+# subw = sf::read_sf("W:/CMadsen/shared_data_sets/WatershedGroups_lowres.shp")
 wb_list = wb_list |> 
   dplyr::left_join(
     subw |> sf::st_drop_geometry() |> dplyr::select(WATERSH = WATERSHED_,
@@ -684,13 +684,18 @@ wb_list_reduced <- wb_list |>
 indig_wbs <- wb_list_reduced |> 
   filter(Flagged_by_FN_partners == TRUE)
 
-remaining_wbs <- wb_list_reduced |> 
-  filter(Flagged_by_FN_partners == FALSE) |> 
-  arrange(desc(priority)) |> 
-  slice_head(n = 100 - nrow(indig_wbs))
+opp_sample_wbs = wb_list_reduced |> 
+  filter(!is.na(opportunistic_sampling))
 
-wb_list_final <- bind_rows(indig_wbs, remaining_wbs |> dplyr::mutate(Flagged_by_FN_partners = NA)) |> 
-  arrange(desc(Flagged_by_FN_partners), desc(priority))
+remaining_wbs <- wb_list_reduced |> 
+  filter(is.na(Flagged_by_FN_partners)) |>
+  filter(is.na(opportunistic_sampling)) |> 
+  arrange(desc(priority)) |> 
+slice_head(n = 100 - (nrow(indig_wbs) + nrow(opp_sample_wbs)))
+
+wb_list_final <- bind_rows(indig_wbs, opp_sample_wbs, 
+                           remaining_wbs) |> 
+  arrange(desc(Flagged_by_FN_partners),desc(opportunistic_sampling), desc(priority))
 
 # For the leaflet map
 wb_no_sara_over_5_in_frascol = wb_list_final |> 
