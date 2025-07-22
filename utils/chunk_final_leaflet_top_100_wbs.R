@@ -76,7 +76,7 @@ l = l |>
     group = "Identified by FN partners",
     options = pathOptions(pane = 'waterbodies_list_no_sara'),
     popup = leafpop::popupTable(
-      wb_sara_over_5_in_frascol,
+      wb_sara_in_frascol_idigenous  |> dplyr::filter(is.na(SARA)),
       zcol = c("SARA")
     )
   )|>
@@ -89,7 +89,7 @@ l = l |>
     group = "Identified by FN partners w/ SARA",
     options = pathOptions(pane = 'waterbodies_list_sara'),
     popup = leafpop::popupTable(
-      wb_sara_over_5_in_frascol,
+      wb_sara_in_frascol_idigenous |> dplyr::filter(!is.na(SARA)),
       zcol = c("SARA")
     )
   ) |>
