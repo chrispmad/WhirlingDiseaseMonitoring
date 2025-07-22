@@ -3,7 +3,7 @@ fn_feedback = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/
 
 # Pull out waterbody names and watershed codes for wbs that have been identified by FN partners.
 identified_by_FN_partners = fn_feedback |>
-  dplyr::filter(original_email_lists | !is.na(Ktunaxa_ID) | !is.na(Shuswap_ID) | !is.na(ONA_ID)) |>
+  dplyr::filter(original_email_lists | !is.na(Ktunaxa_ID) | !is.na(Shuswap_ID) | !is.na(ONA_ID) | `Waterbody Name` == "Fraling Creek") |>
   dplyr::select(GNIS_NA = `Waterbody Name`,
                 WATERSH = `Watershed Code`) |>
   dplyr::mutate(Flagged_by_FN_partners = TRUE) |>
@@ -116,7 +116,7 @@ if (nrow(new_lakes) > 0) {
 }
 
 
-if(nrow(new_streams) > 1){
+if(nrow(new_streams) > 0){
   new_streams <- new_streams |>
     dplyr::rename(GNIS_NAME_1 = GNIS_NAME,
                   BLK = BLUE_LINE_KEY)
@@ -133,7 +133,7 @@ nations_wb = nations_wb |>
                      ) |>
                      dplyr::mutate(keep_me = TRUE) |>
                      dplyr::select(GNIS_NAME_1, WATERSHED_GROUP_ID,keep_me)) |>
-  dplyr::filter(keep_me) |>
+  dplyr::filter(keep_me | GNIS_NAME_1 %in% c("Fraling Creek")) |>
   dplyr::select(-keep_me)
 
 nations_priorities <- nations_wb |>
@@ -163,7 +163,11 @@ additional_op_sample_rows = nations_priorities |>
 
 wb_list <- wb_list |>
   dplyr::bind_rows(
-    additional_op_sample_rows |> dplyr::left_join(opportunistic_sampling)
+    additional_op_sample_rows |>
+      dplyr::left_join(opportunistic_sampling)
   )
 
+# wb_list |>
+#   dplyr::filter(GNIS_NA %in% c("Fraling Creek","Windermere Lake"))
+#   dplyr::mutate(Flagged_by_FN_partners = ifelse(GNIS_NA %in% c("Fraling Creek","Windermere Lake")))
 # still_missing <- list_nations[!list_nations %in% wb_list$GNIS_NA]

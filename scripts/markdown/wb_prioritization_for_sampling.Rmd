@@ -691,9 +691,10 @@ remaining_wbs <- wb_list_reduced |>
   filter(is.na(Flagged_by_FN_partners)) |>
   filter(is.na(opportunistic_sampling)) |> 
   arrange(desc(priority)) |> 
-slice_head(n = 100 - (nrow(indig_wbs) + nrow(opp_sample_wbs)))
+slice_head(n = 100 - (nrow(indig_wbs)))
 
-wb_list_final <- bind_rows(indig_wbs, opp_sample_wbs, 
+# NEED TO FIX #
+wb_list_final <- bind_rows(indig_wbs, 
                            remaining_wbs) |> 
   arrange(desc(Flagged_by_FN_partners),desc(opportunistic_sampling), desc(priority))
 
