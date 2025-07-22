@@ -11,7 +11,7 @@ library(readxl)
 library(sf)
 library(ENMeval)
 library(rJava)
-set.seed(912)
+#set.seed(912)
 
 rJava::.jinit()
 
@@ -63,6 +63,7 @@ turbidity<-terra::rast(paste0(onedrive_wd,"/raster/Turbidity_All_masked_krig.tif
 slope<-terra::rast(paste0(onedrive_wd,"/raster/slope_BC.tif"))
 phosphorus<-terra::rast(paste0(onedrive_wd,"/raster/Phosphorus_All_masked_krig.tif"))
 water_temp<-terra::rast(paste0(onedrive_wd,"/raster/Temperature_All_masked_krig.tif"))
+
 
 
 rast_brick<-c(carbon, conductivitity, nitrates, oxygen, turbidity, slope, phosphorus, water_temp)
