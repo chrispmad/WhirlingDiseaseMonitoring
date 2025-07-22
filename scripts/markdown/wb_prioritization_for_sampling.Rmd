@@ -374,14 +374,41 @@ if(!file.exists("data/parks_prot_areas_bcdata_layer.rds")){
   parks = readRDS("data/parks_prot_areas_bcdata_layer.rds")
 }
 
+# Read in Stephen Ban's feedback here:
+park_priorities = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/Whirling_Disease_Park_Prioritization.xlsx"))
+
+park_priorities_s = park_priorities |> 
+  dplyr::select(nearby_wb,priority) |> 
+  dplyr::filter(!is.na(priority)) |> 
+  tidyr::separate_wider_delim(cols = nearby_wb, delim = ', ', names = c("GNIS_NA","WATERSHED_NAME")) |> 
+  dplyr::mutate(priority = stringr::str_remove(priority, " \\(.*")) |> 
+  dplyr::mutate(priority = ifelse(priority == "L-M", "M", priority)) |> 
+  dplyr::mutate(priority = factor(priority, levels = c("L","M","H","VH"))) |> 
+  group_by(GNIS_NA, WATERSHED_NAME) |> 
+  dplyr::slice_max(priority) |> 
+  dplyr::ungroup() |> 
+  dplyr::rename(parks_priority = priority) |> 
+  dplyr::distinct()
+
+# Snag the watershed codes based on names
+subw = sf::read_sf("W:/CMadsen/shared_data_sets/WatershedGroups_lowres.shp")
+
+park_priorities_s = park_priorities_s |> 
+  dplyr::left_join(
+    subw |> sf::st_drop_geometry() |> dplyr::select(WATERSH = WATERSHED_,
+                                                    WATERSHED_NAME = WATERSHE_1)
+  )
+
 parks |> 
   sf::st_drop_geometry() |> 
   dplyr::count(PROTECTED_AREA_TYPE, sort = T) |> 
   knitr::kable()
 
-ggplot() +
-  geom_sf(data = bcmaps::bc_bound()) + 
-  geom_sf(data = parks, aes(col = PROTECTED_AREA_TYPE, fill = PROTECTED_AREA_TYPE))
+if(!interactive()){
+  ggplot() +
+    geom_sf(data = bcmaps::bc_bound()) + 
+    geom_sf(data = parks, aes(col = PROTECTED_AREA_TYPE, fill = PROTECTED_AREA_TYPE))
+}
 
 DT::datatable(parks |> sf::st_drop_geometry() |> dplyr::slice(1:10))
 
@@ -394,6 +421,9 @@ parks_nearby = parks |>
 wb_list = wb_list |> 
   dplyr::left_join(parks_nearby)
 
+# Join on Stephen Ban's feedback regarding park priority levels
+wb_list = wb_list |> 
+  dplyr::left_join(park_priorities_s)
 ```
 
 ### Water Quality
@@ -501,6 +531,8 @@ The listed waterbodies provided were (in no particular order):
 
 -   Windermere Creek
 
+-   Windermere Lake
+
 -   Luxor Creek
 
 -   Galena Creek (Fraling Creek in Freshwater Atlas)
@@ -534,6 +566,14 @@ The listed waterbodies provided were (in no particular order):
 -   Beaver Creek Provincial Park in Trail (Columbia River?)
 
 -   Trail boat launch (Columbia River?)
+
+-   Mabel Lake
+
+-   Meziadin Lake
+
+-   Cultus Lake
+
+-   Adams Lake
 
 ```{r other_considerations}
 source("utils/chunk_add_FN_priorities_and_other_considerations.R", local = T)

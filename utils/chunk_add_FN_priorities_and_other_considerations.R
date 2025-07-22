@@ -1,16 +1,53 @@
+# Read in feedback compilation
+fn_feedback = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/First_Nations_Feedback_compilation.xlsx"))
+
+# Pull out waterbody names and watershed codes for wbs that have been identified by FN partners.
+identified_by_FN_partners = fn_feedback |>
+  dplyr::filter(original_email_lists | !is.na(Ktunaxa_ID) | !is.na(Shuswap_ID) | !is.na(ONA_ID)) |>
+  dplyr::select(GNIS_NA = `Waterbody Name`,
+                WATERSH = `Watershed Code`) |>
+  dplyr::mutate(Flagged_by_FN_partners = TRUE) |>
+  dplyr::distinct()
+
+# Join on to wb_list
 wb_list = wb_list |>
-  dplyr::mutate(other_priority_species = NA, opportunistic_sampling = NA)
+  dplyr::left_join(identified_by_FN_partners)
+
+# Pull out the same for opportunisitic sampling.
+opportunistic_sampling = fn_feedback |>
+  dplyr::select(GNIS_NA = `Waterbody Name`,
+                WATERSH = `Watershed Code`,
+                Ktunaxa_OS, ONA_OS, Shuswap_OS) |>
+  dplyr::mutate(Ktunaxa_OS = ifelse(!str_detect(Ktunaxa_OS,"^KTUNAXA_"),paste0("KTUNAXA_",Ktunaxa_OS),Ktunaxa_OS),
+                Shuswap_OS = ifelse(!str_detect(Shuswap_OS,"^SHUSWAP_"),paste0("SHUSWAP_",Shuswap_OS),Shuswap_OS),
+                ONA_OS = ifelse(!str_detect(ONA_OS,"^ONA_"),paste0("ONA_",ONA_OS),ONA_OS)) |>
+  dplyr::distinct() |>
+  dplyr::rowwise() |>
+  dplyr::mutate(opportunistic_sampling = paste0(na.omit(Ktunaxa_OS), na.omit(Shuswap_OS), na.omit(ONA_OS), collapse = ", ")) |>
+  dplyr::select(GNIS_NA,
+                WATERSH,
+                opportunistic_sampling) |>
+  dplyr::distinct() |>
+  dplyr::filter(opportunistic_sampling != "")
+
+wb_list = wb_list |>
+  dplyr::left_join(opportunistic_sampling)
+
+# opportunistic_sampling$GNIS_NA[!opportunistic_sampling$GNIS_NA %in% wb_list$GNIS_NA]
+
+wb_list = wb_list |>
+  dplyr::mutate(other_priority_species = NA)
 
 list_nations <- c("Dutch Creek", "Windermere Creek", "Luxor Creek", "Fraling Creek",
                   "Slocan Lake", "Lower Kootenay River", "Lower Columbia River",
                   "Columbia River", "Kootenay River",
                   "Okanagan Lake", "Skaha Lake", "Vaseux Lake", "Osoyoos Lake",
                   "Okanagan River", "Upper Arrow Lake", "Lower Arrow Lake",
-                  "Slocan River", "Duncan Lake", "Moyie Lake")
+                  "Slocan River", "Duncan Lake", "Moyie Lake", "Hill Creek")
 
-# first, see if the the wbs in list_nations is already present in wb_list
-wb_list<-wb_list |>
-  dplyr::mutate(Flagged_by_FN_partners = ifelse(GNIS_NA %in% list_nations, TRUE, FALSE))
+# # first, see if the the wbs in list_nations is already present in wb_list
+# wb_list<-wb_list |>
+#   dplyr::mutate(Flagged_by_FN_partners = ifelse(GNIS_NA %in% list_nations, TRUE, FALSE))
 
 #for the ones that have not been found
 list_nations <- list_nations[!list_nations %in% wb_list$GNIS_NA]
@@ -88,6 +125,17 @@ if(nrow(new_streams) > 1){
 nations_wb<-bind_rows(new_wbs, new_streams, new_lakes) |>
   select(GNIS_NAME_1, WATERSHED_GROUP_ID, WB_POLY_ID, BLK, geometry)
 
+# Filter output by the GNIS_NA and WATERSHED_GROUP_ID from feedback document.
+nations_wb = nations_wb |>
+  dplyr::left_join(fn_feedback |>
+                     dplyr::rename(GNIS_NAME_1 = `Waterbody Name`,
+                                   WATERSHED_GROUP_ID = `Watershed Code`
+                     ) |>
+                     dplyr::mutate(keep_me = TRUE) |>
+                     dplyr::select(GNIS_NAME_1, WATERSHED_GROUP_ID,keep_me)) |>
+  dplyr::filter(keep_me) |>
+  dplyr::select(-keep_me)
+
 nations_priorities <- nations_wb |>
   group_by(GNIS_NA = GNIS_NAME_1,
            WATERSH = WATERSHED_GROUP_ID,
@@ -99,10 +147,23 @@ nations_priorities <- nations_wb |>
 #lets add the nations_priorities to the wb_list and change the Flagged_by_FN_partners to TRUE for the new entries
 nations_priorities <- st_transform(nations_priorities, st_crs(wb_list))
 
+additional_nations_priorities = nations_priorities |>
+  filter(GNIS_NA %in% identified_by_FN_partners$GNIS_NA)
+
 wb_list <- wb_list |>
   dplyr::bind_rows(
-    nations_priorities |>
-      dplyr::mutate(Flagged_by_FN_partners = TRUE)
+    additional_nations_priorities |>
+      dplyr::mutate(Flagged_by_FN_partners = TRUE) |>
+      dplyr::left_join(opportunistic_sampling)
   )
 
-still_missing <- list_nations[!list_nations %in% wb_list$GNIS_NA]
+additional_op_sample_rows = nations_priorities |>
+  filter(GNIS_NA %in% opportunistic_sampling$GNIS_NA) |>
+  dplyr::filter(!GNIS_NA %in% wb_list$GNIS_NA)
+
+wb_list <- wb_list |>
+  dplyr::bind_rows(
+    additional_op_sample_rows |> dplyr::left_join(opportunistic_sampling)
+  )
+
+# still_missing <- list_nations[!list_nations %in% wb_list$GNIS_NA]
