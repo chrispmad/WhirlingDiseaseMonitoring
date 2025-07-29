@@ -127,7 +127,6 @@ clake <- data.frame(
 
 sara_sp<-bind_rows(sara_sp, clake)
 
-
 sara_sp <- sf::st_transform(sara_sp, st_crs(wb_list))
 
 # Perform spatial join: match SARA species polygons to waterbodies
@@ -144,4 +143,4 @@ wb_with_sara_grouped <- wb_with_sara_grouped |>
   mutate(sara = na_if(trimws(sara), ""))
 
 wb_list<-wb_with_sara_grouped
-rm(wb_with_sara_grouped, sara_sp, wb_with_sara,sara_all)
+rm(wb_with_sara_grouped, wb_with_sara,sara_all)

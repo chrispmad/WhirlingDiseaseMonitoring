@@ -706,8 +706,6 @@ opp_diff <- opp_sample_wbs |>
 # Combine indig_wbs with non-overlapping opp_sample_wbs rows
 nation_wbs <- bind_rows(indig_wbs, opp_diff)
 
-
-
 remaining_wbs <- wb_list_reduced |> 
   filter(is.na(Flagged_by_FN_partners)) |>
   filter(is.na(opportunistic_sampling)) |> 
@@ -735,6 +733,11 @@ wb_sara_in_frascol_nonindigenous = wb_list_final |>
   dplyr::filter(Flagged_by_FN_partners == FALSE)
 ```
 
+```{r list_of_wbs_with_flagged_by_FN_or_opp_work}
+wb_list_final_w_FN = wb_list_final |> 
+  dplyr::filter(Flagged_by_FN_partners | !is.na(opportunistic_sampling))
+```
+
 ```{r update_column_names_for_excel_output}
 make_final_column_names = function(dat){
   dat = dat |> 
@@ -743,7 +746,7 @@ make_final_column_names = function(dat){
                 `Watershed Code` = WATERSH,
                 `Watershed Name` = WATERSH_NAME,
                 `Identified by FN partners` = Flagged_by_FN_partners,
-                `Potential opportunisitic sampling` = opportunistic_sampling
+                `Potential WD Sampling Overlap with Existing Projects` = opportunistic_sampling
                 )
   if("BLK" %in% names(dat)){
     dat = dat |> dplyr::select(-c(BLK,WB_POLY_ID,watershed))
@@ -764,12 +767,24 @@ make_final_column_names = function(dat){
 wb_nice_names = make_final_column_names(wb_list)
 wb_list_SARA_nice_names = make_final_column_names(wb_list_SARA)
 wb_list_final_nice_names = make_final_column_names(wb_list_final)
+wb_list_final_w_FN_nice_names = make_final_column_names(wb_list_final_w_FN)
 
-# Final re-ordering of columns for final tab.
+# Final re-ordering of columns for final tabs.
 wb_list_final_nice_names = wb_list_final_nice_names |> 
   dplyr::select(`Waterbody Name`, `Watershed Code`, `Watershed Name`,
                 Priority,sampled_2024, `Identified by FN partners`,
-                `Potential opportunisitic sampling`,SARA,
+                `Potential WD Sampling Overlap with Existing Projects`,SARA,
+                dplyr::everything()) |> 
+  dplyr::rename(DRAFT_parks_priority = parks_priority)
+
+wb_list_final_w_FN_nice_names = wb_list_final_w_FN_nice_names |> 
+  dplyr::mutate(`Sample Site` = NA,
+                `Site Latitude` = NA,
+                `Site Longitude` = NA) |> 
+  dplyr::select(`Waterbody Name`, `Watershed Name`, `Sample Site`,
+                `Site Latitude`, `Site Longitude`, `Watershed Code`, 
+                Priority, sampled_2024, `Identified by FN partners`,
+                `Potential WD Sampling Overlap with Existing Projects`,SARA,
                 dplyr::everything()) |> 
   dplyr::rename(DRAFT_parks_priority = parks_priority)
 ```
@@ -777,6 +792,7 @@ wb_list_final_nice_names = wb_list_final_nice_names |>
 ```{r write_out_data}
 saveRDS(wb_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_all_waterbodies.rds"))
 saveRDS(wb_list_final_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_100_waterbodies.rds"))
+saveRDS(wb_list_final_w_FN_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_waterbodies_for_sampling.rds"))
 ```
 
 ```{r write_out_results_to_excel_file}
@@ -786,11 +802,13 @@ saveRDS(wb_list_final_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_an
 wb_for_excel = wb_nice_names |> sf::st_drop_geometry()
 wb_list_SARA_for_excel = wb_list_SARA_nice_names |> sf::st_drop_geometry()
 wb_list_final_for_excel = wb_list_final_nice_names |> sf::st_drop_geometry()
+wb_list_final_w_FN_for_excel = wb_list_final_w_FN_nice_names |> sf::st_drop_geometry()
 
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "All Waterbodies")
 openxlsx::addWorksheet(my_wb, "SARA Overlaps")
 openxlsx::addWorksheet(my_wb, "Top 100 priority list")
+openxlsx::addWorksheet(my_wb, "Priority list for sampling")
 openxlsx::writeData(my_wb, "All Waterbodies",
                     wb_for_excel |> 
                       dplyr::arrange(dplyr::desc(Priority)))
@@ -803,11 +821,17 @@ openxlsx::writeData(my_wb, "Top 100 priority list",
                     wb_list_final_for_excel |> 
                       dplyr::arrange(dplyr::desc(Priority)))
 
+openxlsx::writeData(my_wb, "Priority list for sampling", 
+                    wb_list_final_w_FN_for_excel |> 
+                      dplyr::arrange(dplyr::desc(Priority)))
+
 openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_for_excel)-1)), widths = 'auto')
 
 openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA_for_excel)-1)), widths = 'auto')
 
 openxlsx::setColWidths(my_wb, "Top 100 priority list", cols = c(1:(ncol(wb_list_final_for_excel)-1)), widths = 'auto')
+
+openxlsx::setColWidths(my_wb, "Priority list for sampling", cols = c(1:(ncol(wb_list_final_w_FN_for_excel)-1)), widths = 'auto')
 
 # # Highlight opportunistic sampling column in all tabs
 # openxlsx::conditionalFormatting(my_wb, "All Waterbodies", cols = which(names(wb_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_for_excel), rule = "TRUE", style = highlight_style)
@@ -842,4 +866,67 @@ This map shows the listed top 100 priority waterbodies:
 source('utils/chunk_final_leaflet_top_100_wbs.R')
 
 l_top_100
+```
+
+### Watersheds with High-priority WBs near SARA {.tabset}
+```{r}
+sara_sp = sf::st_transform(sara_sp, 4326)
+sara_sp = sf::st_make_valid(sara_sp)
+
+# Find the watersheds to make plots for.
+wbs_for_plot = wb_list_final_w_FN_nice_names |> 
+  dplyr::filter(is.na(SARA)) |> 
+  dplyr::filter(`Watershed Name` != "Kinskuch River")
+
+watersheds_for_plot = bcdc_query_geodata('freshwater-atlas-watershed-groups') |> 
+  filter(WATERSHED_GROUP_NAME %in% local(wbs_for_plot$`Watershed Name`)) |> 
+  collect() |> 
+  sf::st_transform(4326)
+
+# ggplot() + 
+#   # geom_sf(data = bcmaps::bc_bound()) +
+#   geom_sf(data = watersheds_for_plot, aes(col = WATERSHED_GROUP_NAME))
+
+# sara_sp = sf::st_make_valid(sara_sp)
+
+sara_in_watersheds = sara_sp |> 
+  sf::st_filter(sf::st_transform(watersheds_for_plot, sf::st_crs(sara_sp))) |> 
+  dplyr::filter(Common_Name_EN != "Bull Trout")
+
+sara_pal = leaflet::colorFactor('Spectral',unique(sara_in_watersheds$Common_Name_EN))
+
+leaflet() |> 
+  # addTiles() |> 
+  addProviderTiles(providers$CartoDB) |> 
+  addPolygons(
+    data = watersheds_for_plot,
+    label = ~WATERSHED_GROUP_NAME,
+    fillColor = 'grey',
+    color = 'grey',
+    weight = 2
+  ) |> 
+  addPolygons(
+    data = sara_in_watersheds,
+    color = 'black',
+    weight = 2,
+    label = ~Common_Name_EN,
+    fillColor = ~sara_pal(Common_Name_EN),
+    fillOpacity = 0.8
+  ) |> 
+  addPolygons(
+    data = wbs_for_plot,
+    label = ~`Waterbody Name`
+  ) |> 
+  addCircleMarkers(
+    data = wd_not_sampled_2024_sf,
+    label = ~Site,
+    radius = 5,
+    color = 'black',
+    fillColor = 'purple',
+    fillOpacity = 0.8
+  ) |> 
+  addLegend(
+    pal = sara_pal, 
+    title = "DFO SARA Polygon",
+    values = unique(sara_in_watersheds$Common_Name_EN))
 ```

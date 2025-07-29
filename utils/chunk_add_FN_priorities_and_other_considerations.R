@@ -27,7 +27,7 @@ opportunistic_sampling = fn_feedback |>
   mutate(opportunistic_sampling = pmap_chr(
     list(Ktunaxa_OS, Shuswap_OS, ONA_OS),
     ~ paste(na.omit(c(...)), collapse = ", ")
-  )) |> 
+  )) |>
   dplyr::select(GNIS_NA,
                 WATERSH,
                 opportunistic_sampling) |>
@@ -154,6 +154,22 @@ nations_priorities <- st_transform(nations_priorities, st_crs(wb_list))
 additional_nations_priorities = nations_priorities |>
   filter(GNIS_NA %in% identified_by_FN_partners$GNIS_NA)
 
+# Do a quick SARA overlap test for additional_nations_priorities
+# and also for additional_op_sample_rows
+sara_sp_by_anp = sara_sp |>
+  sf::st_join(sf::st_transform(additional_nations_priorities, sf::st_crs(sara_sp))) |>
+  sf::st_drop_geometry() |>
+  dplyr::filter(!is.na(GNIS_NA))
+
+sara_sp_by_anp = sara_sp_by_anp |>
+  sf::st_drop_geometry() |>
+  dplyr::count(GNIS_NA, WATERSH, Common_Name_EN) |>
+  dplyr::select(-n) |>
+  dplyr::rename(sara = Common_Name_EN)
+
+additional_nations_priorities = additional_nations_priorities |>
+  dplyr::left_join(sara_sp_by_anp)
+
 wb_list <- wb_list |>
   dplyr::bind_rows(
     additional_nations_priorities |>
@@ -164,6 +180,20 @@ wb_list <- wb_list |>
 additional_op_sample_rows = nations_priorities |>
   filter(GNIS_NA %in% opportunistic_sampling$GNIS_NA) |>
   dplyr::filter(!GNIS_NA %in% wb_list$GNIS_NA)
+
+sara_sp_by_aos = sara_sp |>
+  sf::st_join(sf::st_transform(additional_op_sample_rows, sf::st_crs(sara_sp))) |>
+  sf::st_drop_geometry() |>
+  dplyr::filter(!is.na(GNIS_NA))
+
+sara_sp_by_aos = sara_sp_by_aos |>
+  sf::st_drop_geometry() |>
+  dplyr::count(GNIS_NA, WATERSH, Common_Name_EN) |>
+  dplyr::select(-n) |>
+  dplyr::rename(sara = Common_Name_EN)
+
+additional_op_sample_rows = additional_op_sample_rows |>
+  dplyr::left_join(sara_sp_by_aos)
 
 wb_list <- wb_list |>
   dplyr::bind_rows(
