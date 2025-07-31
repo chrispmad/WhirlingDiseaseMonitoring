@@ -50,15 +50,15 @@ wbs_sampled_2024 = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPE
   dplyr::filter(sampled_in_2024_y_n == 'Y')
 ```
 
-## Prioritization Equation {.tabset}
+## Waterbody Ranking Equation {.tabset}
 
-Priority Equation:
+Waterbody Ranking Equation:
 
 $$
-P_w = EnteringBC_w + InsideBC_w + FishingDays_w + WaterAuths_w
+R_w = EnteringBC_w + InsideBC_w + FishingDays_w + WaterAuths_w
 $$
 
-Where *P~w~* is the priority ranking of a given waterbody, EnteringBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, InsideBC~w~ is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, Fishingdays~w~ is the binned fishing days reported for a given waterbody, and WaterAuths~w~ is the binned number of current water authorization points tied to MOTT projects within a given waterbody.
+Where *R~w~* is the rank of a given waterbody (higher ranks indicate more use or nearby water authorizations), EnteringBC~w~ is the binned number of watercraft destined for a given waterbody from a Whirling Disease-infected state/province/territory that is not BC, InsideBC~w~ is the binned number of watercraft destined for a given waterbody coming from a Whirling Disease-infected waterbody in BC, Fishingdays~w~ is the binned fishing days reported for a given waterbody, and WaterAuths~w~ is the binned number of current water authorization points tied to MOTT projects within a given waterbody.
 
 ### Watercraft Inspections Coming from Infected States/Provinces
 
@@ -746,7 +746,8 @@ make_final_column_names = function(dat){
                 `Watershed Code` = WATERSH,
                 `Watershed Name` = WATERSH_NAME,
                 `Identified by FN partners` = Flagged_by_FN_partners,
-                `Potential WD Sampling Overlap with Existing Projects` = opportunistic_sampling
+                `Potential WD Sampling Overlap with Existing Projects` = opportunistic_sampling,
+                `Model Ranking` = priority
                 )
   if("BLK" %in% names(dat)){
     dat = dat |> dplyr::select(-c(BLK,WB_POLY_ID,watershed))
@@ -760,7 +761,7 @@ make_final_column_names = function(dat){
                   ) |>
       dplyr::mutate(`Identified by FN partners` = ifelse(!`Identified by FN partners`,NA,`Identified by FN partners`)) |> 
       dplyr::select(`Waterbody Name`, `Watershed Code`, `Watershed Name`,
-                    Priority = priority, `Identified by FN partners`, dplyr::everything())
+                    `Model Ranking`, `Identified by FN partners`, dplyr::everything())
 }
 
 # To each cut of the data, apply the function that renames columns
@@ -772,7 +773,7 @@ wb_list_final_w_FN_nice_names = make_final_column_names(wb_list_final_w_FN)
 # Final re-ordering of columns for final tabs.
 wb_list_final_nice_names = wb_list_final_nice_names |> 
   dplyr::select(`Waterbody Name`, `Watershed Code`, `Watershed Name`,
-                Priority,sampled_2024, `Identified by FN partners`,
+                `Model Ranking`,sampled_2024, `Identified by FN partners`,
                 `Potential WD Sampling Overlap with Existing Projects`,SARA,
                 dplyr::everything()) |> 
   dplyr::rename(DRAFT_parks_priority = parks_priority)
@@ -783,7 +784,7 @@ wb_list_final_w_FN_nice_names = wb_list_final_w_FN_nice_names |>
                 `Site Longitude` = NA) |> 
   dplyr::select(`Waterbody Name`, `Watershed Name`, `Sample Site`,
                 `Site Latitude`, `Site Longitude`, `Watershed Code`, 
-                Priority, sampled_2024, `Identified by FN partners`,
+                `Model Ranking`, sampled_2024, `Identified by FN partners`,
                 `Potential WD Sampling Overlap with Existing Projects`,SARA,
                 dplyr::everything()) |> 
   dplyr::rename(DRAFT_parks_priority = parks_priority)
@@ -807,31 +808,31 @@ wb_list_final_w_FN_for_excel = wb_list_final_w_FN_nice_names |> sf::st_drop_geom
 my_wb = openxlsx::createWorkbook()
 openxlsx::addWorksheet(my_wb, "All Waterbodies")
 openxlsx::addWorksheet(my_wb, "SARA Overlaps")
-openxlsx::addWorksheet(my_wb, "Top 100 priority list")
-openxlsx::addWorksheet(my_wb, "Priority list for sampling")
+openxlsx::addWorksheet(my_wb, "Top 100 list")
+# openxlsx::addWorksheet(my_wb, "Priority list for sampling")
 openxlsx::writeData(my_wb, "All Waterbodies",
                     wb_for_excel |> 
-                      dplyr::arrange(dplyr::desc(Priority)))
+                      dplyr::arrange(dplyr::desc(`Model Ranking`)))
 
 openxlsx::writeData(my_wb, "SARA Overlaps", 
                     wb_list_SARA_for_excel |>
-                      dplyr::arrange(dplyr::desc(Priority)))
+                      dplyr::arrange(dplyr::desc(`Model Ranking`)))
 
-openxlsx::writeData(my_wb, "Top 100 priority list", 
+openxlsx::writeData(my_wb, "Top 100 list", 
                     wb_list_final_for_excel |> 
-                      dplyr::arrange(dplyr::desc(Priority)))
+                      dplyr::arrange(dplyr::desc(`Model Ranking`)))
 
-openxlsx::writeData(my_wb, "Priority list for sampling", 
-                    wb_list_final_w_FN_for_excel |> 
-                      dplyr::arrange(dplyr::desc(Priority)))
+# openxlsx::writeData(my_wb, "Priority list for sampling", 
+#                     wb_list_final_w_FN_for_excel |> 
+#                       dplyr::arrange(dplyr::desc(Priority)))
 
 openxlsx::setColWidths(my_wb, "All Waterbodies", cols = c(1:(ncol(wb_for_excel)-1)), widths = 'auto')
 
 openxlsx::setColWidths(my_wb, "SARA Overlaps", cols = c(1:(ncol(wb_list_SARA_for_excel)-1)), widths = 'auto')
 
-openxlsx::setColWidths(my_wb, "Top 100 priority list", cols = c(1:(ncol(wb_list_final_for_excel)-1)), widths = 'auto')
+openxlsx::setColWidths(my_wb, "Top 100 list", cols = c(1:(ncol(wb_list_final_for_excel)-1)), widths = 'auto')
 
-openxlsx::setColWidths(my_wb, "Priority list for sampling", cols = c(1:(ncol(wb_list_final_w_FN_for_excel)-1)), widths = 'auto')
+# openxlsx::setColWidths(my_wb, "Priority list for sampling", cols = c(1:(ncol(wb_list_final_w_FN_for_excel)-1)), widths = 'auto')
 
 # # Highlight opportunistic sampling column in all tabs
 # openxlsx::conditionalFormatting(my_wb, "All Waterbodies", cols = which(names(wb_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_for_excel), rule = "TRUE", style = highlight_style)
@@ -840,17 +841,17 @@ openxlsx::setColWidths(my_wb, "Priority list for sampling", cols = c(1:(ncol(wb_
 
 # openxlsx::conditionalFormatting(my_wb, "Top 100 priority list", cols = which(names(wb_list_final_for_excel) == "Opportunisitic sampling (please insert name)"), rows = 1:nrow(wb_list_final_for_excel), rule = "TRUE", style = highlight_style)
 
-openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
+openxlsx::saveWorkbook(my_wb, paste0("output/Whirling_Disease_waterbody_rankings_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 
-file.copy(from = paste0("output/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"),
-          to = paste0("J:/2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/Whirling_Disease_priorities_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
+file.copy(from = paste0("output/Whirling_Disease_waterbody_rankings_for_waterbody_sampling_",Sys.Date(),".xlsx"),
+          to = paste0("J:/2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/2025/Whirling_Disease_waterbody_rankings_for_waterbody_sampling_",Sys.Date(),".xlsx"), overwrite = T)
 ```
 
 ```{r fig.width = 9, fig.height = 6}
 source("utils/chunk_leaflet_map_all_wbs_but_not_shown.R", local = T)
 ```
 
-### Priority Waterbodies with SARA Overlaps
+### Waterbodies with SARA Overlaps
 
 ```{r  fig.width=10, fig.height = 8}
 source("utils/chunk_leaflet_map_SARA_overlap.R", local = T)
@@ -860,7 +861,7 @@ m_sara_overlap
 
 ### Whirling Disease Sampling with Waterbodies
 
-This map shows the listed top 100 priority waterbodies:
+This map shows the listed top 100 waterbodies:
 
 ```{r fig.width=10, fig.height = 8}
 source('utils/chunk_final_leaflet_top_100_wbs.R')
@@ -868,7 +869,7 @@ source('utils/chunk_final_leaflet_top_100_wbs.R')
 l_top_100
 ```
 
-### Watersheds with High-priority WBs near SARA {.tabset}
+### Watersheds with High-ranking WBs near SARA {.tabset}
 ```{r}
 sara_sp = sf::st_transform(sara_sp, 4326)
 sara_sp = sf::st_make_valid(sara_sp)

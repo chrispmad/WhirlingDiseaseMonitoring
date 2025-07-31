@@ -27,12 +27,12 @@ ang = sf::read_sf("W:/CMadsen/shared_data_sets/freshwater_fisheries_society_angl
 bin_to_natural_breaks = function(dat,variable){
   # find natural breaks ("jenks")
   nbreaks = BAMMtools::getJenksBreaks(var = dat[[variable]], k = 4)
-  dat |> 
-    dplyr::rename(var_to_bin = !!rlang::sym(variable)) |> 
-    dplyr::mutate(var_bin = as.numeric(cut(var_to_bin,nbreaks))) |> 
-    dplyr::mutate(var_bin = tidyr::replace_na(var_bin, 1)) |> 
-    dplyr::mutate(var_bin = as.character(var_bin)) |> 
-    dplyr::mutate(var_bin = factor(var_bin, levels = c(1:3))) |> 
+  dat |>
+    dplyr::rename(var_to_bin = !!rlang::sym(variable)) |>
+    dplyr::mutate(var_bin = as.numeric(cut(var_to_bin,nbreaks))) |>
+    dplyr::mutate(var_bin = tidyr::replace_na(var_bin, 1)) |>
+    dplyr::mutate(var_bin = as.character(var_bin)) |>
+    dplyr::mutate(var_bin = factor(var_bin, levels = c(1:3))) |>
     dplyr::rename(!!rlang::sym(paste0(variable,"_natural_bin")) := var_bin,
                   !!rlang::sym(variable) := var_to_bin)
 }
@@ -45,20 +45,20 @@ bin_to_kmeans <- function(dat, variable, centers = k_breaks) {
   } else {
     dat_df <- dat
   }
-  
+
   valid_rows <- is.finite(dat_df[[variable]])
   dat_df_valid <- dat_df[valid_rows, ]
-  
+
   set.seed(123)
   km <- stats::kmeans(dat_df_valid[[variable]], centers = centers, iter.max = 100)
-  
+
   cluster_means <- tapply(dat_df_valid[[variable]], km$cluster, mean)
   ordered_clusters <- order(cluster_means)
   relabeled_clusters <- match(km$cluster, ordered_clusters)
-  
+
   bin_col <- rep(NA, nrow(dat_df))
   bin_col[valid_rows] <- factor(relabeled_clusters, levels = as.character(1:centers))
-  
+
   return(bin_col)
 }
 
@@ -90,10 +90,10 @@ getKMeansBreaks <- function(var, k = k_breaks) {
 }
 
 test_k<-function(data,var, k){
-  
+
   col_name<-paste0("k_break_",k)
   data[[col_name]]<-bin_to_kmeans(data,var,k)
-  
+
   return(data)
 }
 
@@ -119,25 +119,25 @@ for (k in 3:7) {
   insp_from_wd_inf_to_wb$TotalInspections_kmeans_bin <- bin_to_kmeans(insp_from_wd_inf_to_wb, "TotalInspections", k)
   insp_from_wd_bc_wb$TotalInspections_kmeans_bin <- bin_to_kmeans(insp_from_wd_bc_wb, "TotalInspections", k)
   ang$days_fished_kmeans_bin <- bin_to_kmeans(ang, "days_fished", k)
-  
+
   # Prepare bin tables
   inf_to_bc_bins <- insp_from_wd_inf_to_wb |>
     sf::st_drop_geometry() |>
     dplyr::select(WATERSH, GNIS_NA,
                   inf_to_bc_kmns_bin = TotalInspections_kmeans_bin)
-  
+
   bc_wd_bins <- insp_from_wd_bc_wb |>
     sf::st_drop_geometry() |>
     dplyr::select(WATERSH, GNIS_NA,
                   bc_wd_kmns_bin = TotalInspections_kmeans_bin)
-  
+
   ang_bins <- ang |>
     sf::st_drop_geometry() |>
     dplyr::rename(WATERSH = WATERSHED_GROUP_ID,
                   GNIS_NA = Waterbody) |>
     dplyr::select(WATERSH, GNIS_NA,
                   ang_kmns_bin = days_fished_kmeans_bin)
-  
+
   # Join and calculate total priority per waterbody
   priority_table <- inf_to_bc_bins |>
     dplyr::full_join(bc_wd_bins, by = c("WATERSH", "GNIS_NA")) |>
@@ -146,7 +146,7 @@ for (k in 3:7) {
     dplyr::mutate(across(c(inf_to_bc_kmns_bin, bc_wd_kmns_bin, ang_kmns_bin), ~tidyr::replace_na(., 0))) |>
     dplyr::mutate(total_priority_kmeans = inf_to_bc_kmns_bin + bc_wd_kmns_bin + ang_kmns_bin,
                   k = k)  # Add k value for tracking
-  
+
   # Store the full table for this k
   priority_tables_by_k[[paste0("k_", k)]] <- priority_table
 }
@@ -173,5 +173,5 @@ rownames(heatmap_matrix) <- heatmap_data$Waterbody
 
 heatmap(heatmap_matrix, Rowv = NA, Colv = NA,
         scale = "none", col = heat.colors(256),
-        main = "Heatmap of Priority Scores by k")
+        main = "Heatmap of Model Ranking Scores by k")
 

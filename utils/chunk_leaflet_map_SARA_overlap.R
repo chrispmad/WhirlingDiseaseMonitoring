@@ -1,6 +1,6 @@
-priority_pal = colorNumeric("viridis", domain = wb_list_SARA_nice_names$Priority)
+priority_pal = colorNumeric("viridis", domain = wb_list_SARA_nice_names$`Model Ranking`)
 
-priority_vals <- sort(unique(wb_list_SARA_nice_names$Priority))
+priority_vals <- sort(unique(wb_list_SARA_nice_names$`Model Ranking`))
 
 priority_vals = priority_vals[priority_vals > 4]
 
@@ -11,16 +11,16 @@ m <- leaflet() |>
 # Add a polygon layer for each priority value
 for (p in priority_vals) {
   if(p < 5) next
-  wb_subset <- wb_list_SARA_nice_names |> filter(Priority == p)
+  wb_subset <- wb_list_SARA_nice_names |> filter(`Model Ranking` == p)
 
   m <- m |> addPolygons(
     data = wb_subset,
-    label = ~paste0(`Waterbody Name`, " (priority ", Priority, ")"),
-    fillColor = ~priority_pal(Priority),
+    label = ~paste0(`Waterbody Name`, " (ranking ", `Model Ranking`, ")"),
+    fillColor = ~priority_pal(`Model Ranking`),
     fillOpacity = 0.8,
     color = "#333333",
     weight = 1,
-    group = paste0("Priority ", p),
+    group = paste0("Model Ranking ", p),
     popup = leafpop::popupTable(
       wb_subset |> st_drop_geometry() |>
         select(`Waterbody Name`,
@@ -29,7 +29,7 @@ for (p in priority_vals) {
                `Boats inside BC (bins 1 - 5)`,
                `Boats entering BC (bins 1 - 5)`,
                `Days fished (bins 1 - 5)`,
-               Priority)
+               `Model Ranking`)
     )
   )
 }
@@ -38,15 +38,15 @@ for (p in priority_vals) {
 # Add layer controls to toggle each priority level
 m <- m |> addLayersControl(
   position = 'bottomleft',
-  overlayGroups = paste0("Priority ", priority_vals),
+  overlayGroups = paste0("Model Ranking ", priority_vals),
   options = layersControlOptions(collapsed = FALSE)
 )
 
 # Optionally add legend
 m <- m |> addLegend(
   pal = priority_pal,
-  values = wb_list_SARA_nice_names$Priority,
-  title = "Priority",
+  values = wb_list_SARA_nice_names$`Model Ranking`,
+  title = "Model Ranking",
   position = "topright"
 )
 
@@ -54,7 +54,7 @@ m <- m |> addLegend(
 m = m |>
   leaflet.extras::addResetMapButton() |>
   leaflet.extras::addSearchFeatures(
-    targetGroups = c(paste0("Priority ",priority_vals)),
+    targetGroups = c(paste0("Model Ranking ",priority_vals)),
     options = leaflet.extras::searchFeaturesOptions(
       zoom=8, openPopup = TRUE, firstTipSubmit = TRUE,
       autoCollapse = F, hideMarkerOnCollapse = TRUE,
