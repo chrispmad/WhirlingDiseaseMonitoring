@@ -84,6 +84,10 @@ Currently, the number of distinct waterbodies with information is `r nrow(wb_lis
 
 ```{r}
 source("utils/chunk_dfo_angler_survey_data.R", local = T)
+
+# Just a thought for next year:
+# If we have duplicate rows based on GNIS_NA and WATERSH, merge those rows here.
+# Keep whichever row had the higher bin number between watercraft and fishing?
 ```
 
 Currently, the number of distinct waterbodies with information is `r nrow(wb_list)`.
@@ -676,6 +680,11 @@ wb_list_NoSARA = wb_list |>
 #     active_water_auths_bin, susceptible_spp, SARA
 #   ) |>
 #   dplyr::distinct()
+wb_list |> 
+  filter(duplicated(paste0(GNIS_NA,WATERSH,WATERSH_NAME)))
+
+wb_list |> 
+  dplyr::filter(GNIS_NA == "Babine River",WATERSH == 6) |> View()
 
 wb_list_reduced <- wb_list |> 
   arrange(desc(priority)) |> 
