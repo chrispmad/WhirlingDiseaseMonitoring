@@ -1,5 +1,5 @@
 ---
-title: "Prioritization of Water Bodies for Whirling Disease Sampling"
+title: "Ranking of Water Bodies for Whirling Disease Sampling"
 author: "Chris Madsen & John Phelan"
 date: "`r Sys.Date()`"
 output: 
@@ -529,7 +529,7 @@ wb_list = wb_list |>
   dplyr::select(-c(tib,iwbc,dfb,wab))
 ```
 
-### First Nations listed priority waterbodies
+### First Nations listed waterbodies
 
 The listed waterbodies provided were (in no particular order):
 
