@@ -1,4 +1,5 @@
 library(readxl)
+library(tidyverse)
 
 # This data file comes from a Microsoft Teams channel (specifically, the Whirling Disease one)
 # I have manually downloaded that excel file and placed it in this R project's data folder.
@@ -72,5 +73,12 @@ wd_results_new_for_list = wd_results_new_for_list |>
 
 d_f = d_f |>
   dplyr::bind_rows(wd_results_new_for_list)
+
+# Double check - if 'sampled_2024' is true, set the comment to null. Also,
+# drop the column sampled_in_2024_y_n to not be confusing.
+d_f = d_f |>
+  dplyr::mutate(sampled_2024 = tidyr::replace_na(sampled_2024, FALSE)) |>
+  dplyr::mutate(Comments = ifelse(sampled_2024 == TRUE, NA, Comments)) |>
+  dplyr::select(-sampled_in_2024_y_n)
 
 openxlsx::write.xlsx(x = d_f, file = "output/Whirling_Disease_top_flagged_waterbody_list.xlsx")
