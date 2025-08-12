@@ -298,22 +298,30 @@ wbs_new = dplyr::bind_rows(
 )
 ```
 
+```{r replace_certain_columns}
+d_with_geometries = d |> 
+  dplyr::left_join(wbs_new |> dplyr::select(`Waterbody Name`,`Watershed Name`))
+
+d_with_geometries = sf::st_set_geometry(d_with_geometries,'geometry')
+
+```
+
 ```{r, fig.width=10, fig.height=8}
 popup_tbls = leafpop::popupTable(
-  wbs_new |> 
+  d_with_geometries |> 
     sf::st_drop_geometry() |> 
     dplyr::select(`Waterbody Name`,
                   `Watershed Name`,
-                  `Model Ranking`,
+                  `Model Priority Ranking`,
                   sampled_2024,
-                  `Identified by FN partners`:SARA,
-                  `WLRS AEB Provincial Fisheries Priority Ranking (1-20)`:`Other WLRS monitoring occurring in 2025? Y/N (potential site for eDNA sampling)`)
+                  `Identified by FN partners`:`SARA Species`,
+                  `WLRS AEB Provincial Fisheries Priority Ranking (1-20)`:`Other WLRS monitoring occurring in 2025? Y/N (potential site for eDNA sampling)`,`Susceptible salmon species present (Y/N/Unknown`)
 )
 
 leaflet() |> 
   addTiles() |> 
   addPolygons(
-    data = wbs_new,
+    data = d_with_geometries,
     label = ~str_remove(`Waterbody Name`,",.*"),
     popup = lapply(
       popup_tbls,
