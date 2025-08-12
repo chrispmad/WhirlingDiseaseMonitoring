@@ -1,0 +1,324 @@
+---
+title: "2025 Short List Map"
+author: "JPhelan & CMadsen"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+library(sf)
+library(tidyverse)
+library(leaflet)
+library(bcdata)
+# Get onedrive path
+base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
+
+# Read in spatial file of top 100 waterbodies
+top_100 = readRDS(paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_100_waterbodies.rds"))
+
+# There's a duplicated row in here; drop it.
+top_100 = top_100 |> 
+  dplyr::filter(!duplicated(paste0(`Waterbody Name`,`Watershed Name`)))
+
+d = readxl::read_excel("data/Whirling_Disease_2025 surveillance short list for input by August 11.xlsx")
+
+```
+
+```{r filter_top_100_by_names_in_d}
+already_have_geometries = top_100 |> 
+  dplyr::filter(paste0(`Waterbody Name`,`Watershed Name`) %in% paste0(d$`Waterbody Name`,d$`Watershed Name`))
+
+need_geometries = d |> 
+  dplyr::filter(!paste0(`Waterbody Name`,`Watershed Name`) %in% paste0(already_have_geometries$`Waterbody Name`,already_have_geometries$`Watershed Name`))
+
+# wshds = bcdc_query_geodata("freshwater-atlas-watershed-groups") |> 
+#   collect()
+wshds = readRDS("data/subwatershed_groups.rds")
+```
+
+```{r assign_coordinates_for_wbs_needing_geometries}
+
+# test = bcdc_query_geodata('freshwater-atlas-rivers') |> 
+#   filter(GNIS_NAME_1 == "Wilmer Creek") |> 
+#   collect()
+# if(nrow(test) > 0){
+#   test = test |> 
+#     sf::st_zm() |> 
+#     dplyr::group_by(BLUE_LINE_KEY) |> 
+#     dplyr::summarise() |> 
+#     dplyr::mutate(type = 'river')
+# }
+#   
+# st_test = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+#   filter(GNIS_NAME == "Wilmer Creek") |> 
+#   collect() |> 
+#   sf::st_zm() |> 
+#   dplyr::group_by(BLUE_LINE_KEY) |> 
+#   dplyr::summarise() |> 
+#   sf::st_buffer(dist = 10) |> 
+#   dplyr::mutate(type = 'stream')
+# 
+# if(nrow(test) > 0){
+#   test = dplyr::bind_rows(test, st_test)
+# } else {
+#   test = st_test
+# }
+#   
+# overlapping_watersheds = wshds |> 
+#   sf::st_filter(test)
+# 
+# leaflet() |> 
+#   addTiles() |> 
+#   addPolygons(data = sf::st_transform(overlapping_watersheds,4326),
+#               label = ~WATERSHED_GROUP_NAME) |> 
+#   addPolygons(data = sf::st_transform(test, 4326),
+#               label = ~BLUE_LINE_KEY)
+```
+
+```{r  query_for_each_wb_missing_geometry}
+alouette = bcdc_query_geodata('freshwater-atlas-lakes') |> 
+  filter(GNIS_NAME_1 == "Alouette Lake") |> 
+  collect() |> 
+  dplyr::mutate(`Waterbody Name` = "Alouette Lake, (Lower Mainland)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326) |> 
+  dplyr::select(`Waterbody Name`,`Watershed Name`)
+
+bcreek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356543221) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Beaver Creek",
+                `Watershed Name` = "Lower Columbia")  |> 
+  sf::st_transform(4326)
+
+bluebcreek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356564443) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Blueberry Creek, (Columbia River)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+burrellcreek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356562739) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Burrell Creek, (Kootenay)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+col_point_bc_alb = data.frame(
+  lat = 51.31291351, lon = -116.9952508
+) |> 
+  sf::st_as_sf(coords = c("lon","lat"),crs = 4326) |> 
+  sf::st_transform(3005)
+
+col_mainstem_gravels = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(GNIS_NAME == 'Columbia River') |>
+  filter(INTERSECTS(local(wshds |> 
+  sf::st_filter(col_point_bc_alb)))) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Columbia River (Mainstem gravels), (Kootenay)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+  fording = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356568903) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Fording River",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+kicking_horse = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356569187) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Kicking Horse River (near Golden)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+columbia_near_castlegar = top_100 |> 
+  dplyr::filter(`Waterbody Name` == 'Columbia River',
+                `Watershed Name` == "Columbia Reach") |> 
+  dplyr::mutate(`Waterbody Name` = 'Columbia River (near Castlegar)') |> 
+  dplyr::select(`Waterbody Name`,`Watershed Code`,`Watershed Name`)
+
+lynch_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356563189) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Lynch Creek, (Kootenay)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+murphy_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356545372) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Murphy Creek, (Columbia River)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+myers_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356553350) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Myers Creek, (Kootenay)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+west_kettle = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356566932) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "West Kettle, (Okanagan)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+wilmer_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356559411) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Wilmer Creek (EB), (NA)",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+new_geometries = dplyr::bind_rows(alouette, bcreek, bluebcreek,
+                                  burrellcreek,fording,kicking_horse,
+                                  col_mainstem_gravels,
+                                  columbia_near_castlegar,lynch_creek,
+                                  murphy_creek,myers_creek,west_kettle,
+                                  wilmer_creek)
+
+need_geometries = need_geometries |> 
+  dplyr::left_join(new_geometries)
+
+need_geometries = sf::st_set_geometry(need_geometries, "geometry")
+
+wbs = dplyr::bind_rows(already_have_geometries,need_geometries) |> 
+  dplyr::filter(!sf::st_is_empty(geometry))
+
+```
+
+```{r}
+# Some of the rivers' geometries are patchy; let's requery their 'stream' versions from the BC data catalogue, buffer by 10 m, and substitute those geometries for the patchy ones.
+rivers_to_streams = wbs |> 
+  dplyr::filter(!stringr::str_detect(`Waterbody Name`, "Lake")) |> 
+  # We've already done this stream geometry acquisition for the 'need_geometries' guys. Drop those.
+  dplyr::filter(!paste0(`Waterbody Name`,`Watershed Name`) %in% paste0(need_geometries$`Waterbody Name`,need_geometries$`Watershed Name`))
+
+geometries_okay = wbs |> 
+  dplyr::filter(stringr::str_detect(`Waterbody Name`, "Lake") | paste0(`Waterbody Name`,`Watershed Name`) %in% paste0(need_geometries$`Waterbody Name`,need_geometries$`Watershed Name`))
+
+rivers_become_streams = rivers_to_streams |> 
+  sf::st_drop_geometry() |> 
+  dplyr::group_by(`Waterbody Name`,`Watershed Code`,`Watershed Name`) |> 
+  dplyr::group_split() |> 
+  purrr::map( ~ {
+    new_geom = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+      filter(GNIS_NAME == .x$`Waterbody Name`, WATERSHED_GROUP_ID == .x$`Watershed Code`) |> 
+      collect()
+    if(nrow(new_geom) > 0){
+      new_geom = new_geom |> 
+        sf::st_buffer(dist = 10) |> 
+        dplyr::select(`Waterbody Name` = GNIS_NAME,
+                      `Watershed Code` = WATERSHED_GROUP_ID) |> 
+        dplyr::group_by(`Waterbody Name`,`Watershed Code`) |> 
+        dplyr::summarise(.groups = 'drop') |> 
+        sf::st_transform(4326)
+    } else {
+      rivers_to_streams |> 
+        dplyr::filter(`Waterbody Name` == .x$`Waterbody Name`,
+                      `Watershed Name` == .x$`Watershed Name`) |> 
+        dplyr::select(`Waterbody Name`,`Watershed Code`)
+    }
+  }, .progress = TRUE)
+
+rivers_become_streams_b = dplyr::bind_rows(rivers_become_streams)
+
+rivers_to_streams_new_geometries = rivers_to_streams |> 
+  sf::st_drop_geometry() |> 
+  dplyr::left_join(rivers_become_streams_b) |> 
+  sf::st_set_geometry("geometry")
+
+# One final thing! Trim away bits of our shiny new stream-based geometries
+# to NOT include overlapping bits with any lakes on our list (e.g.
+# Okanagan Lake and Okanagan River), and also do an intersection with
+# bc bound to exclude stuff outside BC.
+rivers_to_streams_new_geometries_bc = rivers_to_streams_new_geometries |> 
+  sf::st_make_valid() |> 
+  sf::st_intersection(bcmaps::bc_bound() |> 
+                        sf::st_transform(4326) |> 
+                        dplyr::summarise())
+
+colnames(rivers_to_streams_new_geometries_bc) = colnames(rivers_to_streams_new_geometries)
+
+lakes_for_st_diff = geometries_okay |> 
+  dplyr::filter(stringr::str_detect(`Waterbody Name`,"Lake")) |> 
+  sf::st_make_valid() |> 
+  sf::st_union()
+               
+rivers_to_streams_new_geometries_bc_no_lakes = rivers_to_streams_new_geometries_bc |> 
+  sf::st_difference(lakes_for_st_diff)
+
+# Recombine into wbs!
+wbs_new = dplyr::bind_rows(
+  geometries_okay,
+  rivers_to_streams_new_geometries_bc_no_lakes
+)
+```
+
+```{r, fig.width=10, fig.height=8}
+popup_tbls = leafpop::popupTable(
+  wbs_new |> 
+    sf::st_drop_geometry() |> 
+    dplyr::select(`Waterbody Name`,
+                  `Watershed Name`,
+                  `Model Ranking`,
+                  sampled_2024,
+                  `Identified by FN partners`:SARA,
+                  `WLRS AEB Provincial Fisheries Priority Ranking (1-20)`:`Other WLRS monitoring occurring in 2025? Y/N (potential site for eDNA sampling)`)
+)
+
+leaflet() |> 
+  addTiles() |> 
+  addPolygons(
+    data = wbs_new,
+    label = ~str_remove(`Waterbody Name`,",.*"),
+    popup = lapply(
+      popup_tbls,
+      htmltools::HTML
+    )
+  )
+```
+

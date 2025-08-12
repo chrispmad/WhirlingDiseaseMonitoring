@@ -81,4 +81,30 @@ d_f = d_f |>
   dplyr::mutate(Comments = ifelse(sampled_2024 == TRUE, NA, Comments)) |>
   dplyr::select(-sampled_in_2024_y_n)
 
+# Final thing! For those waterbodies sampled for eDNA last year (i.e. 2024,
+# as of today's date), bring across what the results were for WD.
+wd_results_to_join = read_excel('data/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx', sheet = "Fish and eDNA") |>
+  purrr::set_names(snakecase::to_snake_case) |>
+  dplyr::filter(!is.na(fish_sampling_results_q_pcr_mc_detected) | !is.na(e_dna_results_mc)) |>
+  dplyr::select(sample_site_name,fish_sampling_results_q_pcr_mc_detected,e_dna_results_mc)
+
+# Manual data.frame version of WD results from 2024.
+# Hopefully we don't have to do this for next year!
+wd_results_to_join = data.frame(
+  `Waterbody Name` = c("Columbia River","Columbia River","Elk River",
+                       "Flathead River","Kootenay Lake (West Arm)",
+                       "Kootenay River","Kootenay River","Kootenay River",
+                       "Shuswap Lake","Windermere Lake"),
+  `Watershed Name` = c("Columbia River","Kicking Horse River","Elk River",
+                       "Elk River","Kooteney Lake","Kootenay Lake",
+                       "Lower Arrow Lake","Slocan River","Shuswap Lake","Columbia River"),
+  fish_WD_results = c("Negative","Negative","Negative","Negative",
+                      NA,),
+  eDNA_WD_results = c("Not Detected","Not Detected","Weak Detection","Not Detected",
+                      NA,)
+)
+
+d_f |>
+  dplyr::filter(sampled_2024)
+
 openxlsx::write.xlsx(x = d_f, file = "output/Whirling_Disease_top_flagged_waterbody_list.xlsx")
