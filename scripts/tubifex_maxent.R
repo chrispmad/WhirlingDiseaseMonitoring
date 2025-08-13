@@ -16,7 +16,7 @@ library(rJava)
 rJava::.jinit()
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 proj_wd = getwd()
@@ -194,10 +194,10 @@ single_model_metrics = single_model_metrics |>
   tidyr::as_tibble() |>
   dplyr::select(metric, value)
 
-contributions = single_model_metrics |> 
+contributions = single_model_metrics |>
   dplyr::filter(str_detect(metric, "contribution")) |>
   dplyr::mutate(variable = str_remove(metric, "contribution_")) |>
-  dplyr::select(variable, value) |> 
+  dplyr::select(variable, value) |>
   dplyr::mutate(value = as.numeric(value)) |>
   dplyr::arrange(dplyr::desc(value))
 
@@ -210,7 +210,7 @@ preds_terra <- rast(me@predictions)  # terra::rast converts raster to SpatRaster
 layer_name <- as.character(opt.aicc$tune.args)
 suitability_raster <- preds_terra[[layer_name]]
 
-crs(suitability_raster) <- "EPSG:4326"  
+crs(suitability_raster) <- "EPSG:4326"
 
 # plot each of the parameters and their contributions to the maxent model
 best_model <- me@models[[opt.aicc$tune.args]]
@@ -250,16 +250,16 @@ plot_data_list <- list()
 for (var_to_vary in names(rast_brick)) {
   # Generate a sequence of values for the current variable
   vary_sequence <- seq(env_stats[[var_to_vary]]$min, env_stats[[var_to_vary]]$max, length.out = n_points)
-  
+
   # Create a data frame for prediction, with the current variable varying
   # and all other variables held at their mean
   temp_pred_df <- template_df[rep(1, n_points), ] # Replicate the template row
   temp_pred_df[[var_to_vary]] <- vary_sequence
-  
+
   # Predict suitability using the best_model
   # Ensure the column order matches the training data (names(rast_brick))
   pred_result <- predict(best_model, temp_pred_df[, names(rast_brick)], type = "cloglog")
-  
+
   # Store the data for plotting
   plot_data_list[[var_to_vary]] <- data.frame(
     variable = var_to_vary,
@@ -312,5 +312,5 @@ habitat_binary <- classify(habitat_binary, rcl = matrix(c(0, 0, 1, 1), ncol = 2,
 
 # Plot or export
 plot(habitat_binary, main = paste("Habitat / Not Habitat -", layer_name))
-crs(habitat_binary) <- "EPSG:4326"  
+crs(habitat_binary) <- "EPSG:4326"
 writeRaster(habitat_binary, paste0("output/habitat_maxent_tubifex_binary_", layer_name, ".tif"), overwrite = TRUE)

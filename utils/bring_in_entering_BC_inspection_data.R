@@ -1,5 +1,5 @@
 if(!file.exists('data/inspections_WD_outside_BC.rds')){
-  insp_from_wd_inf_to_wb = sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
+  insp_from_wd_inf_to_wb = sf::read_sf("//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/CMadsen_Wdrive/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years_WD_Infected_Areas.gpkg")
 
   insp_from_wd_inf_to_wb$WB_POLY_ID = NA
   insp_from_wd_inf_to_wb$BLK = NA

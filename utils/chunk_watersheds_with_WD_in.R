@@ -1,4 +1,4 @@
-ws = sf::read_sf("W:/CMadsen/shared_data_sets/subwatersheds_BC.shp")
+ws = sf::read_sf("//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/CMadsen_Wdrive/shared_data_sets/subwatersheds_BC.shp")
 
 edna_results = readxl::read_excel(paste0(lan_root,"2 SCIENCE - Invasives/SPECIES/Whirling Disease/Monitoring/WD_sampling_results_fish_eDNA_used_for_making_maps_CMADSEN.xlsx")) |>
   purrr::set_names(snakecase::to_snake_case)
@@ -11,7 +11,7 @@ pos_fish_edna_sf = sf::st_as_sf(pos_fish_plus_parasite_edna,coords = c('long','l
 # Also pull in emerald lake, find its centroid.
 emerald_lake = bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |>
   bcdata::filter(GNIS_NAME_1 == 'Emerald Lake', WATERBODY_POLY_ID == 705013945) |>
-  collect()
+  bcdata::collect()
 
 emerald_lake_centroid = emerald_lake |>
   sf::st_centroid()

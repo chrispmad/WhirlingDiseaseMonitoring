@@ -2,7 +2,7 @@ if(!file.exists('data/water_authorization_points.rds')){
   # water_apps = bcdc_query_geodata('water-approval-points') |>
   #   # filter(INTERSECTS(wsg)) |>
   #   collect()
-  water_apps = sf::read_sf("W:/CMadsen/shared_data_sets/water_sustainability_act_approvals_section_10_and_11.shp")
+  water_apps = sf::read_sf("//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/CMadsen_Wdrive/shared_data_sets/water_sustainability_act_approvals_section_10_and_11.shp")
   water_apps = sf::st_filter(water_apps, bcmaps::bc_bound())
   water_apps = water_apps |> dplyr::filter(stringr::str_detect(WSD_TECHNI, "(Johnson, Lyndsey|Wells, Duane|Huynh, Mai-Linh|Charleton, Kristin)"))
   saveRDS(water_apps,'data/water_authorization_points.rds')

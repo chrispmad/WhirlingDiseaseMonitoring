@@ -6,7 +6,7 @@ library(bcdata)
 library(tidygeocoder)
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
 dat2024<-read.csv(paste0(onedrive_wd,"FFSBC_fish_stocking_2024.csv"))
@@ -70,22 +70,26 @@ matched <- joined %>%
 
 # - - - - - - - - - - - - -
 
-bc_locs = data.frame(location = unique(stringr::str_to_sentence(all_years$Nearest.Town)))
+bc_locs = all_years |>
+  dplyr::select(Waterbody.Name,Nearest.Town) |>
+  dplyr::distinct()
 
 #Create new variables that we will fill with the loop below.
-bc_locs$lon = 0
+bc_locs$lng = 0
 bc_locs$lat = 0
 
 #This loop uses the BC geocoder to find the most likely coordinates
 # for each of the unique place names.
 for(i in 1:nrow(bc_locs)){
+  if(bc_locs[i,]$lng == 0){
   print(i)
   # Pull out place name.
-  my.name = bc_locs[i,]$location
+  my.name = paste0(bc_locs[i,]$Waterbody.Name, " LAKE NEAR ",bc_locs[i,]$Nearest.Town)
   # Replace any accented names, starting with just é.
   my.name = stringr::str_replace_all(my.name, "(é|Ã©)", "e")
   #Clean up names. Remove anything in brackets.
   my.name = stringr::str_remove_all(my.name, " \\(.*\\)")
+  my.name = stringr::str_remove_all(my.name, "\\– ")
   #Add spaces to names.
   my.name = stringr::str_replace_all(my.name, " ", "%20")
 
@@ -93,12 +97,27 @@ for(i in 1:nrow(bc_locs)){
                my.name,'&maxResults=1&outputSRS=4326')
 
   my.coords = jsonlite::fromJSON(url)$features$geometry |>
-    dplyr::summarise(lon = stringr::str_extract(coordinates, "(?<=c\\().*(?=\\,)"),
+    dplyr::summarise(lng = stringr::str_extract(coordinates, "(?<=c\\().*(?=\\,)"),
                      lat = stringr::str_extract(coordinates, "(?<=\\,).*(?=\\))"))
 
-  bc_locs[i,]$lon = my.coords$lon
+  bc_locs[i,]$lng = my.coords$lng
   bc_locs[i,]$lat = my.coords$lat
+  }
 }
+
+# Save results of BC Geocoder to data!
+write.csv(bc_locs, file = "data/stocking_locations_geolocation_results.csv", row.names = F)
+
+# test_sf = sf::st_as_sf(bc_locs[19,], coords = c("lon","lat"),crs = 4326) |>
+#   sf::st_buffer(5000)
+
+# leaflet() |> addTiles() |> addPolygons(data = test_sf)
+
+# Step 2: do overlay with wb_list
+# Step 3: in cases of multiple overlay matches, do some kind of
+# string (fuzzy?) filter to snag most likely option. Keep only one.
+
+
 
 # how many were successfully matched to locations?
 bc_locs |>
@@ -107,4 +126,27 @@ bc_locs |>
 
 bc_locs = bc_locs |>
   dplyr::filter(!is.na(lon))
+
+unique_lake_names = stringr::str_to_title(unique(bc_locs$Waterbody.Name))
+# One more attempt!
+
+unique_lake_names = unlist(
+  lapply(unique_lake_names, \(x) {
+    if(!stringr::str_detect(x,"(Pond|Lakes|Pit )")){
+      paste0(x, " Lake")
+    }
+  })
+)
+
+all_potential_lakes = bcdc_query_geodata('freshwater-atlas-lakes') |>
+  filter(GNIS_NAME_1 %in% unique_lake_names) |>
+  collect()
+
+all_potential_lakes$keep_me = FALSE
+
+# For each unique lake name and nearest city name,
+# test to see which of the query returned lakes is the most suitable.
+for(i in 1:nrow(all_potential_lakes)){
+
+}
 

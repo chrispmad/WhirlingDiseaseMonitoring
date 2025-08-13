@@ -14,13 +14,13 @@ library(ENMeval)
 
 
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
 
 lan_folder = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 proj_wd = getwd()
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
 
 # Data
 # Copy excel results from LAN folder IF it has all the right columns. This is
@@ -54,20 +54,20 @@ dat = dat |>
   dplyr::mutate(fish_sampling_results_q_pcr_mc_detected = ifelse(str_detect(fish_sampling_results_q_pcr_mc_detected,"Positive"),"Positive",fish_sampling_results_q_pcr_mc_detected)) |>
   dplyr::mutate(comments = ifelse(comments == '', NA, comments))
 
-dat_max<-dat |> 
-  select(sample_site_name,e_dna_results_mc, fish_sampling_results_q_pcr_mc_detected, geometry) |> 
-  plyr::mutate(e_dna_results_mc = ifelse(str_detect(e_dna_results_mc,"Weak Detection"),"Positive","Negative")) |> 
-  filter(e_dna_results_mc == "Positive" | fish_sampling_results_q_pcr_mc_detected == "Positive") |> 
+dat_max<-dat |>
+  select(sample_site_name,e_dna_results_mc, fish_sampling_results_q_pcr_mc_detected, geometry) |>
+  plyr::mutate(e_dna_results_mc = ifelse(str_detect(e_dna_results_mc,"Weak Detection"),"Positive","Negative")) |>
+  filter(e_dna_results_mc == "Positive" | fish_sampling_results_q_pcr_mc_detected == "Positive") |>
   distinct()
 
 anglerUse<-terra::rast(paste0(onedrive_wd,"CNF/DFO_angling_survey_days_fished_raster.tif"))
-watercraft2<-sf::read_sf("W:/CMadsen/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years.gpkg")
+watercraft2<-sf::read_sf("//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/CMadsen_Wdrive/Projects/ZQMussels/data/Waterbodies_with_Inspection_Data_Summaries_all_years.gpkg")
 road_distances<-terra::rast(paste0(onedrive_wd,"CNF/distance_to_numbered_highway_raster.tif"))
 
 watercraft_rast<-
   watercraft2 |>
   sf::st_transform(crs = terra::crs(road_distances)) |>
-  filter(!GNIS_NA %in% c("Pacific Ocean", "Dry Storage")) |> 
+  filter(!GNIS_NA %in% c("Pacific Ocean", "Dry Storage")) |>
   terra::vect() |>
   terra::rasterize(anglerUse, field = "TotalInspections", fun = "sum")
 #repalce NA with 0
@@ -81,35 +81,35 @@ rast_brick<-c(
 
 bc<-bcmaps::bc_bound()
 extentvect<- project(vect(bc),"EPSG:4326")
-watercourses = terra::rast(paste0(onedrive_wd,"fwa_streams/stream_order_three_plus_2km_res.tif")) 
+watercourses = terra::rast(paste0(onedrive_wd,"fwa_streams/stream_order_three_plus_2km_res.tif"))
 watercourses<-terra::crop(watercourses, extentvect)
 watercourses<-terra::mask(watercourses, extentvect)
 
-pseudoabsences <- predicts::backgroundSample(watercourses, p = terra::vect(dat), n = 10000, extf = 0.9) |> 
+pseudoabsences <- predicts::backgroundSample(watercourses, p = terra::vect(dat), n = 10000, extf = 0.9) |>
   as.data.frame()
 
 
 
-    
-    dat_max = dat_max |> 
+
+    dat_max = dat_max |>
       dplyr::mutate(x = sf::st_coordinates(geometry)[,1],
                     y = sf::st_coordinates(geometry)[,2])
-    
+
     for(raster_var in unique(names(rast_brick))){
-      dat_max[[raster_var]] <- terra::extract(rast_brick[[raster_var]], 
+      dat_max[[raster_var]] <- terra::extract(rast_brick[[raster_var]],
                                           dat_max[,c("x","y")], ID = FALSE)[[raster_var]]
     }
 
 
 
 
-pres_xy<- dat_max |> 
+pres_xy<- dat_max |>
   dplyr::mutate(x = sf::st_coordinates(geometry)[,1],
-                y = sf::st_coordinates(geometry)[,2]) |> 
-  dplyr::select(x,y) |> 
+                y = sf::st_coordinates(geometry)[,2]) |>
+  dplyr::select(x,y) |>
   sf::st_drop_geometry()
 
-pseudo<- pseudoabsences |> 
+pseudo<- pseudoabsences |>
   dplyr::select(x,y)
 
 me = ENMevaluate(occs = pres_xy,
@@ -120,9 +120,9 @@ me = ENMevaluate(occs = pres_xy,
                  tune.args = list(fc = c("L", "Q", "LQ"),
                                   rm = c(1:5)))
 
-top_model1 = me@results |> 
-  dplyr::mutate(auccbi = (cbi.train + auc.train) / 2) |> 
-  dplyr::arrange(dplyr::desc(auccbi)) |> 
+top_model1 = me@results |>
+  dplyr::mutate(auccbi = (cbi.train + auc.train) / 2) |>
+  dplyr::arrange(dplyr::desc(auccbi)) |>
   dplyr::slice(1)
 
 top_model = me@predictions[[top_model1$tune.args]]

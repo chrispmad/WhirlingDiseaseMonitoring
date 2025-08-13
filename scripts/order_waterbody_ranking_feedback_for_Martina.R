@@ -4,7 +4,7 @@ library(tidyverse)
 # This data file comes from a Microsoft Teams channel (specifically, the Whirling Disease one)
 # I have manually downloaded that excel file and placed it in this R project's data folder.
 
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
 
 the_filepath = list.files(path = 'data', pattern = "Whirling_Disease_top 100.*",
                           full.names = T)
