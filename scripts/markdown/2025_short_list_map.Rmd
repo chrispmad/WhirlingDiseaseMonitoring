@@ -15,7 +15,7 @@ library(leaflet)
 library(bcdata)
 # Get onedrive path
 base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
-onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
 # Read in spatial file of top 100 waterbodies
@@ -26,6 +26,9 @@ top_100 = top_100 |>
   dplyr::filter(!duplicated(paste0(`Waterbody Name`,`Watershed Name`)))
 
 d = readxl::read_excel("data/Whirling_Disease_2025 surveillance short list for input by August 11.xlsx")
+
+# Also read in Martina's new doc that allows us to colour-code the points
+c = readxl::read_excel("data/Whirling_Disease_2025 surveillance short list_August 15 compiled version.xlsx")
 
 ```
 
@@ -306,27 +309,86 @@ d_with_geometries = sf::st_set_geometry(d_with_geometries,'geometry')
 
 ```
 
+```{r use_updated_document_to_inform_colour_coding}
+c = c |> 
+  dplyr::mutate(proposed_sampling_org = stringr::str_replace_all(`Proposed sampling organization`, "(\\()?\\?(\\))?.*", "?"))
+
+c_f = c |> 
+  dplyr::filter(!is.na(`Proposed sampling organization`))
+
+orgs = unique(c_f$proposed_sampling_org)
+
+d_with_geometries = d_with_geometries |> 
+  dplyr::left_join(c_f |> 
+                     dplyr::select(
+                       `Waterbody Name`, 
+                       `Watershed Name`,
+                       proposed_site_name = `Proposed sample site name`,
+                       proposed_sampling_org)
+  )
+
+# Rename NA to "None"
+d_with_geometries = d_with_geometries |> 
+  dplyr::mutate(proposed_sampling_org = tidyr::replace_na(proposed_sampling_org, "None"))
+```
+
 ```{r, fig.width=10, fig.height=8}
+
+org_pal = leaflet::colorFactor(domain = orgs, palette = 'Paired')
+
+# Remove duplicated lake rows
+d_with_geometries = d_with_geometries |> 
+  dplyr::filter(!(`Waterbody Name` == "Lower Arrow Lake" & `Watershed Name` == "Upper Arrow Lake"))
+
 popup_tbls = leafpop::popupTable(
   d_with_geometries |> 
     sf::st_drop_geometry() |> 
     dplyr::select(`Waterbody Name`,
                   `Watershed Name`,
+                  proposed_site_name,
                   `Model Priority Ranking`,
                   sampled_2024,
                   `Identified by FN partners`:`SARA Species`,
-                  `WLRS AEB Provincial Fisheries Priority Ranking (1-20)`:`Other WLRS monitoring occurring in 2025? Y/N (potential site for eDNA sampling)`,`Susceptible salmon species present (Y/N/Unknown`)
+                  `WLRS AEB Provincial Fisheries Priority Ranking (1-20)`:`Other WLRS monitoring occurring in 2025? Y/N (potential site for eDNA sampling)`,`Susceptible salmon species present (Y/N/Unknown`,proposed_sampling_org)
 )
 
+# Create small layer of points where we have geometries.
+specific_points = c |> 
+  dplyr::filter(!is.na(`GPS coordinates if available`)) |> 
+  dplyr::filter(`GPS coordinates if available` != "unknown") |> 
+  dplyr::filter(stringr::str_detect(`GPS coordinates if available`,'[0-9]+')) |> 
+  dplyr::mutate(lat = stringr::str_extract(`GPS coordinates if available`,"^[0-9]{2}\\.[0-9]+"),
+                lng = stringr::str_extract(`GPS coordinates if available`,"-[0-9]{3}\\.[0-9]+")) |> 
+  sf::st_as_sf(coords = c("lng","lat"), crs = 4326)
+
 leaflet() |> 
-  addTiles() |> 
+  addTiles(group = "OSM") |>
+  addProviderTiles(providers$CartoDB, group = "CartoDB") |> 
+  addLayersControl(position = 'bottomleft',
+                   baseGroups = c("CartoDB","OSM"),
+                   options = layersControlOptions(collapsed = F)) |> 
   addPolygons(
     data = d_with_geometries,
     label = ~str_remove(`Waterbody Name`,",.*"),
+    color = ~org_pal(proposed_sampling_org),
+    fillColor = ~org_pal(proposed_sampling_org),
+    fillOpacity = 0.8,
     popup = lapply(
       popup_tbls,
       htmltools::HTML
     )
+  ) |> 
+  addCircleMarkers(
+    data = specific_points,
+    color = 'black',
+    fillColor = 'black',
+    radius = 3,
+    label = ~paste0(`Proposed sample site name`,", ",`Waterbody Name`)
+  ) |> 
+  addLegend(
+    title = "Proposed Sampling\nOrganization",
+    pal = org_pal,
+    values = unique(d_with_geometries$proposed_sampling_org)
   )
 ```
 
