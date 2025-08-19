@@ -39,31 +39,31 @@ already_have_geometries = top_100 |>
 need_geometries = d |> 
   dplyr::filter(!paste0(`Waterbody Name`,`Watershed Name`) %in% paste0(already_have_geometries$`Waterbody Name`,already_have_geometries$`Watershed Name`))
 
-# wshds = bcdc_query_geodata("freshwater-atlas-watershed-groups") |> 
-#   collect()
-wshds = readRDS("data/subwatershed_groups.rds")
+wshds = bcdc_query_geodata("freshwater-atlas-watershed-groups") |>
+  collect()
+# wshds = readRDS("data/subwatershed_groups.rds")
 ```
 
 ```{r assign_coordinates_for_wbs_needing_geometries}
-
-# test = bcdc_query_geodata('freshwater-atlas-rivers') |> 
-#   filter(GNIS_NAME_1 == "Wilmer Creek") |> 
+# 
+# test = bcdc_query_geodata('freshwater-atlas-rivers') |>
+#   filter(GNIS_NAME_1 == "Deer Creek") |>
 #   collect()
 # if(nrow(test) > 0){
-#   test = test |> 
-#     sf::st_zm() |> 
-#     dplyr::group_by(BLUE_LINE_KEY) |> 
-#     dplyr::summarise() |> 
+#   test = test |>
+#     sf::st_zm() |>
+#     dplyr::group_by(BLUE_LINE_KEY) |>
+#     dplyr::summarise() |>
 #     dplyr::mutate(type = 'river')
 # }
-#   
-# st_test = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
-#   filter(GNIS_NAME == "Wilmer Creek") |> 
-#   collect() |> 
-#   sf::st_zm() |> 
-#   dplyr::group_by(BLUE_LINE_KEY) |> 
-#   dplyr::summarise() |> 
-#   sf::st_buffer(dist = 10) |> 
+# 
+# st_test = bcdc_query_geodata('freshwater-atlas-stream-network') |>
+#   filter(GNIS_NAME == "Deer Creek") |>
+#   collect() |>
+#   sf::st_zm() |>
+#   dplyr::group_by(BLUE_LINE_KEY) |>
+#   dplyr::summarise() |>
+#   sf::st_buffer(dist = 10) |>
 #   dplyr::mutate(type = 'stream')
 # 
 # if(nrow(test) > 0){
@@ -71,14 +71,14 @@ wshds = readRDS("data/subwatershed_groups.rds")
 # } else {
 #   test = st_test
 # }
-#   
-# overlapping_watersheds = wshds |> 
+# 
+# overlapping_watersheds = wshds |>
 #   sf::st_filter(test)
 # 
-# leaflet() |> 
-#   addTiles() |> 
+# leaflet() |>
+#   addTiles() |>
 #   addPolygons(data = sf::st_transform(overlapping_watersheds,4326),
-#               label = ~WATERSHED_GROUP_NAME) |> 
+#               label = ~WATERSHED_GROUP_NAME) |>
 #   addPolygons(data = sf::st_transform(test, 4326),
 #               label = ~BLUE_LINE_KEY)
 ```
@@ -91,6 +91,19 @@ alouette = bcdc_query_geodata('freshwater-atlas-lakes') |>
                 `Watershed Name` = NA) |> 
   sf::st_transform(4326) |> 
   dplyr::select(`Waterbody Name`,`Watershed Name`)
+
+
+deer_creek<-bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(GNIS_NAME == "Deer Creek") |> 
+  filter(BLUE_LINE_KEY == 356559322) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Deer Creek",
+                `Watershed Name` = "Lower Arrow Lake")  |> 
+  sf::st_transform(4326)
+
 
 bcreek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
   filter(BLUE_LINE_KEY == 356543221) |> 
@@ -221,7 +234,7 @@ new_geometries = dplyr::bind_rows(alouette, bcreek, bluebcreek,
                                   col_mainstem_gravels,
                                   columbia_near_castlegar,lynch_creek,
                                   murphy_creek,myers_creek,west_kettle,
-                                  wilmer_creek)
+                                  wilmer_creek,deer_creek)
 
 need_geometries = need_geometries |> 
   dplyr::left_join(new_geometries)
@@ -313,6 +326,15 @@ d_with_geometries = sf::st_set_geometry(d_with_geometries,'geometry')
 c = c |> 
   dplyr::mutate(proposed_sampling_org = stringr::str_replace_all(`Proposed sampling organization`, "(\\()?\\?(\\))?.*", "?"))
 
+c = c |> 
+  mutate(proposed_sampling_org = str_replace(proposed_sampling_org,"\\?",""))
+
+c <- c |>
+  mutate(proposed_sampling_org = case_when(
+    proposed_sampling_org %in% c("WLRS", "MOTT or WLRS", "MOTT") ~ "BC Gov (WLRS/MOTT)",
+    TRUE ~ proposed_sampling_org
+  ))
+
 c_f = c |> 
   dplyr::filter(!is.na(`Proposed sampling organization`))
 
@@ -333,8 +355,9 @@ d_with_geometries = d_with_geometries |>
 ```
 
 ```{r, fig.width=10, fig.height=8}
-
-org_pal = leaflet::colorFactor(domain = orgs, palette = 'Paired')
+library(RColorBrewer)
+# display.brewer.all()
+org_pal = leaflet::colorFactor(domain = orgs, palette = 'Dark2')
 
 # Remove duplicated lake rows
 d_with_geometries = d_with_geometries |> 
@@ -360,6 +383,11 @@ specific_points = c |>
   dplyr::mutate(lat = stringr::str_extract(`GPS coordinates if available`,"^[0-9]{2}\\.[0-9]+"),
                 lng = stringr::str_extract(`GPS coordinates if available`,"-[0-9]{3}\\.[0-9]+")) |> 
   sf::st_as_sf(coords = c("lng","lat"), crs = 4326)
+
+#something is not a polygon? Why?
+d_with_geometries <- d_with_geometries |>
+  mutate(geometry = st_collection_extract(geometry, "POLYGON")) |>
+  st_cast("MULTIPOLYGON")
 
 leaflet() |> 
   addTiles(group = "OSM") |>
@@ -390,5 +418,9 @@ leaflet() |>
     pal = org_pal,
     values = unique(d_with_geometries$proposed_sampling_org)
   )
+```
+
+```{r}
+
 ```
 
