@@ -235,6 +235,31 @@ new_geometries = dplyr::bind_rows(alouette, bcreek, bluebcreek,
                                   columbia_near_castlegar,lynch_creek,
                                   murphy_creek,myers_creek,west_kettle,
                                   wilmer_creek,deer_creek)
+# Do a SAR overlap here.
+need_geometries$`SARA Species` = NULL
+
+dfo_sara = sf::read_sf(paste0(onedrive_wd,"DFO_SARA/dfo_sara_occurrences_in_BC_no_marine.gpkg"))
+
+# Filter for just CNF agreement species.
+dfo_sara_f = dfo_sara |> 
+  dplyr::filter(Common_Name_EN  == "Bull Trout" & Population_EN == "South Coast" |
+                  Common_Name_EN == "Westslope Cutthroat Trout" & Population_EN == "Pacific" |
+                  Common_Name_EN == "Sockeye Salmon" & Population_EN == "Cultus")
+
+new_geom_w_SAR = new_geometries |> 
+  sf::st_transform(sf::st_crs(dfo_sara_f)) |> 
+  sf::st_join(dfo_sara_f |> dplyr::select(Common_Name_EN,Population_EN))
+
+new_geom_w_SAR_sum_tbl = new_geom_w_SAR |> 
+  dplyr::filter(!is.na(Common_Name_EN)) |> 
+  sf::st_drop_geometry() |> 
+  dplyr::count(`Waterbody Name`,`Watershed Name`,Common_Name_EN, Population_EN) |> 
+  dplyr::group_by(`Waterbody Name`,`Watershed Name`) |> 
+  dplyr::summarise(`SARA Species` = paste0(paste0(Common_Name_EN, " (",Population_EN,")"),collapse = ', ')) |> 
+  dplyr::ungroup()
+
+new_geometries = new_geometries |> 
+  dplyr::left_join(new_geom_w_SAR_sum_tbl)
 
 need_geometries = need_geometries |> 
   dplyr::left_join(new_geometries)
@@ -243,7 +268,6 @@ need_geometries = sf::st_set_geometry(need_geometries, "geometry")
 
 wbs = dplyr::bind_rows(already_have_geometries,need_geometries) |> 
   dplyr::filter(!sf::st_is_empty(geometry))
-
 ```
 
 ```{r}
