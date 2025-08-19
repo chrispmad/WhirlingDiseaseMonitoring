@@ -29,7 +29,7 @@ if(requery_occs){
 
 names(species_occs) <- gsub(" ", "_", species_names)
 
-fish_occs <- bind_rows(species_occs, .id = "species")
+fish_occs <- dplyr::bind_rows(species_occs, .id = "species")
 
 # Quick double check of mountain whitefish and rainbow trout.
 
