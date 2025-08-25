@@ -27,8 +27,10 @@ top_100 = top_100 |>
 
 d = readxl::read_excel("data/Whirling_Disease_2025 surveillance short list for input by August 11.xlsx")
 
-new_rows_to_add<-tibble(`Waterbody Name` =  c("Lardeau River", "Salmo River", "Carnes Creek"),
-                            `Watershed Name` =  c("Duncan Lake", "Lower Arrow Lake", "Revelstoke Lake"))
+new_rows_to_add<-tibble(`Waterbody Name` =  c("Lardeau River", "Salmo River", "Carnes Creek",
+                                              "Fording River", "Burton Creek", "Snow Creek"),
+                            `Watershed Name` =  c("Duncan Lake", "Lower Arrow Lake", "Revelstoke Lake",
+                                                  "Elk River", "Adams River", "Lower Arrow Lake"))
 
 
 d <- d |> 
@@ -52,41 +54,41 @@ wshds = bcdc_query_geodata("freshwater-atlas-watershed-groups") |>
 
 ```{r assign_coordinates_for_wbs_needing_geometries}
 
-# test = bcdc_query_geodata('freshwater-atlas-rivers') |>
-#   filter(GNIS_NAME_1 == "Salmo River") |>
-#   collect()
-# if(nrow(test) > 0){
-#   test = test |>
-#     sf::st_zm() |>
-#     dplyr::group_by(BLUE_LINE_KEY) |>
-#     dplyr::summarise() |>
-#     dplyr::mutate(type = 'river')
-# }
-# 
-# st_test = bcdc_query_geodata('freshwater-atlas-stream-network') |>
-#   filter(GNIS_NAME == "Salmo River") |>
-#   collect() |>
-#   sf::st_zm() |>
-#   dplyr::group_by(BLUE_LINE_KEY) |>
-#   dplyr::summarise() |>
-#   sf::st_buffer(dist = 10) |>
-#   dplyr::mutate(type = 'stream')
-# 
-# if(nrow(test) > 0){
-#   test = dplyr::bind_rows(test, st_test)
-# } else {
-#   test = st_test
-# }
-# 
-# overlapping_watersheds = wshds |>
-#   sf::st_filter(test)
-# 
-# leaflet() |>
-#   addTiles() |>
-#   addPolygons(data = sf::st_transform(overlapping_watersheds,4326),
-#               label = ~WATERSHED_GROUP_NAME) |>
-#   addPolygons(data = sf::st_transform(test, 4326),
-#               label = ~BLUE_LINE_KEY)
+test = bcdc_query_geodata('freshwater-atlas-rivers') |>
+  filter(GNIS_NAME_1 == "Burton Creek") |>
+  collect()
+if(nrow(test) > 0){
+  test = test |>
+    sf::st_zm() |>
+    dplyr::group_by(BLUE_LINE_KEY) |>
+    dplyr::summarise() |>
+    dplyr::mutate(type = 'river')
+}
+
+st_test = bcdc_query_geodata('freshwater-atlas-stream-network') |>
+  filter(GNIS_NAME == "Burton Creek") |>
+  collect() |>
+  sf::st_zm() |>
+  dplyr::group_by(BLUE_LINE_KEY) |>
+  dplyr::summarise() |>
+  sf::st_buffer(dist = 10) |>
+  dplyr::mutate(type = 'stream')
+
+if(nrow(test) > 0){
+  test = dplyr::bind_rows(test, st_test)
+} else {
+  test = st_test
+}
+
+overlapping_watersheds = wshds |>
+  sf::st_filter(test)
+
+leaflet() |>
+  addTiles() |>
+  addPolygons(data = sf::st_transform(overlapping_watersheds,4326),
+              label = ~WATERSHED_GROUP_NAME) |>
+  addPolygons(data = sf::st_transform(test, 4326),
+              label = ~BLUE_LINE_KEY)
 ```
 
 ```{r  query_for_each_wb_missing_geometry}
@@ -265,6 +267,36 @@ carnes_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |>
                 `Watershed Name` = "Revelstoke Lake") |> 
   sf::st_transform(4326)
 
+fording_river = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356568903) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Fording River",
+                `Watershed Name` = "Elk River") |> 
+  sf::st_transform(4326)
+
+burton_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356271598) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Burton Creek",
+                `Watershed Name` = "Adams River") |> 
+  sf::st_transform(4326)
+
+snow_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356565817) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Snow Creek",
+                `Watershed Name` = "Lower Arrow Lake") |> 
+  sf::st_transform(4326)
+
 
 new_geometries = dplyr::bind_rows(alouette, bcreek, bluebcreek,
                                   burrellcreek,fording,kicking_horse,
@@ -272,7 +304,8 @@ new_geometries = dplyr::bind_rows(alouette, bcreek, bluebcreek,
                                   columbia_near_castlegar,lynch_creek,
                                   murphy_creek,myers_creek,west_kettle,
                                   wilmer_creek,deer_creek,
-                                  salmo_river, lardeau_river, carnes_creek)
+                                  salmo_river, lardeau_river, carnes_creek,
+                                  fording_river, burton_creek, snow_creek)
 ```
 
 ```{r do_sara_overlap_again}
