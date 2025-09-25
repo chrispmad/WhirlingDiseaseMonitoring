@@ -1,5 +1,5 @@
 ---
-title: "2025 Short List Map"
+title: "2025 Surveillance Map"
 author: "JPhelan"
 date: "`r Sys.Date()`"
 output: html_document
@@ -36,7 +36,10 @@ new_rows_to_add<-tibble(`Waterbody Name` =  c("Lardeau River", "Salmo River", "C
 d <- d |> 
   bind_rows(new_rows_to_add)
 # Also read in Martina's new doc that allows us to colour-code the points
-c = readxl::read_excel("data/Whirling_Disease_2025 surveillance short list_Sep 02 compiled version.xlsx")
+c = readxl::read_excel("data/Whirling_Disease_2025 surveillance short list_Sep 02 compiled version.xlsx") 
+
+c <- c |> 
+  filter(`Confirmed to be sampled in 2025 (Y/N/Recommend to remove)` == "Y")
 
 ```
 
@@ -456,6 +459,9 @@ d_with_geometries = sf::st_set_geometry(d_with_geometries,'geometry')
 
 ```
 
+
+
+
 ```{r use_updated_document_to_inform_colour_coding}
 c = c |> 
   dplyr::mutate(proposed_sampling_org = stringr::str_replace_all(`Proposed sampling organization`, "( )?(\\()?\\?(\\))?.*", "?"))
@@ -466,12 +472,15 @@ c = c |>
 
 c <- c |>
   mutate(proposed_sampling_org = case_when(
-    proposed_sampling_org %in% c("WLRS", "MOTT or WLRS", "MOTT") ~ "BC Gov (WLRS/MOTT)",
+    proposed_sampling_org %in% c("WLRS", "MOTT or WLRS", "MOTT") ~ "WLRS",
     TRUE ~ proposed_sampling_org
   ))
 
+c <- c |> 
+  dplyr::select(-`Proposed sampling organization`)
+
 c_f = c |> 
-  dplyr::filter(!is.na(`Proposed sampling organization`))
+  dplyr::filter(!is.na(proposed_sampling_org))
 
 orgs = unique(c_f$proposed_sampling_org)
 
@@ -479,24 +488,254 @@ c_f<- c_f |>
   rename(,
          )
 
-d_with_geometries = d_with_geometries |> 
-  dplyr::left_join(c_f |> 
-                     dplyr::select(
-                       `Waterbody Name`, 
-                       `Watershed Name`= `Sub-Watershed/Reach Name`,
-                       proposed_site_name = `Proposed Sample site name`,
-                       proposed_sampling_org = `Proposed sampling organization`)
+# Remove those that are not to be sampled
+c_f <- c_f |> 
+  filter(`Confirmed to be sampled in 2025 (Y/N/Recommend to remove)` == "Y")
+
+c_f <- c_f |> 
+  rename( `Watershed Name` = `Sub-Watershed/Reach Name`)
+
+c_f_with_geom <- c_f |>
+  dplyr::left_join(
+    d_with_geometries |> 
+      dplyr::select(`Waterbody Name`, `Watershed Name`, geometry),
+    by = c("Waterbody Name", "Watershed Name")
   )
+
+c_missing_geom<-c_f_with_geom |> 
+  filter(sf::st_is_empty(geometry))
+
+## For those with a waterbody name and a watershed name - lets get the geometries and add them on
+# filter for where there are no coordinates in the missing geoms
+c_missing_geom_f <- c_missing_geom |> 
+  filter(is.na(`GPS coordinates\r\nLongitude`) | is.na(`GPS coordinates\r\nLatitude`))
+
+c_missing_geom_f_ws<- c_missing_geom_f |> 
+  filter(!is.na(`Sub-Watershed/Reach Code`))
+
+## For these, search the stream network for geometries
+# Function to query one waterbody by name
+get_fwa_geom <- function(wb_name, watershed_code) {
+  message("Searching: ", wb_name)
+
+  # Query FWA by stream name
+  stream <- bcdc_query_geodata('freshwater-atlas-stream-network') |>
+    filter(GNIS_NAME == wb_name & WATERSHED_GROUP_ID == watershed_code) |> 
+    collect()
+
+  if (nrow(stream) == 0) {
+    warning("No match for ", wb_name)
+    return(NULL)
+  }
+
+  # Collapse into one geometry + buffer
+  stream |> 
+    group_by() |> 
+    summarise() |> 
+    st_buffer(dist = 10) |> 
+    mutate(
+      `Waterbody Name` = wb_name,
+      `Watershed Code` = watershed_code
+    ) |> 
+    st_transform(4326)
+}
+
+# Apply across missing list
+extra_geoms <- pmap(
+  list(
+    wb_name = c_missing_geom_f_ws$`Waterbody Name`,
+    watershed_code = c_missing_geom_f_ws$`Sub-Watershed/Reach Code`
+  ),
+  get_fwa_geom
+) |> compact() |> bind_rows()
+
+#################################################################
+
+# extra geoms has 4 of them
+# for the others, lets try get the codes of the watersheds they provided
+
+# For the ones with no codes
+ws_code_missing<-c_missing_geom_f |> 
+  filter(is.na(`Sub-Watershed/Reach Code`))
+# check wshds for the names - if they are there, replace the NA with the codes
+
+#### do the same as Chris did above
+
+st_test = bcdc_query_geodata('freshwater-atlas-stream-network') |>
+  filter(GNIS_NAME == "Nicola River") |>
+  collect() |>
+  sf::st_zm() |>
+  dplyr::group_by(BLUE_LINE_KEY) |>
+  dplyr::summarise() |>
+  sf::st_buffer(dist = 10) |>
+  dplyr::mutate(type = 'stream')
+
+
+
+overlapping_watersheds = wshds |>
+  sf::st_filter(st_test)
+
+leaflet() |>
+  addTiles() |>
+  addPolygons(data = sf::st_transform(overlapping_watersheds,4326),
+              label = ~WATERSHED_GROUP_NAME) |>
+  addPolygons(data = sf::st_transform(st_test, 4326),
+              label = ~BLUE_LINE_KEY)
+
+###
+
+
+burton_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356271598) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Burton Creek",
+                `Watershed Name` = "Adams River") |> 
+  sf::st_transform(4326)
+
+snow_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356565817) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Snow Creek",
+                `Watershed Name` = "Lower Arrow Lake") |> 
+  sf::st_transform(4326)
+
+fording_river = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356568903 ) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Fording River",
+                `Watershed Name` = NA) |> 
+  sf::st_transform(4326)
+
+
+gold_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356570354 ) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Gold Creek",
+                `Watershed Name` = "Bull River") |> 
+  sf::st_transform(4326)
+
+phillips_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356408128 ) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Phillips Creek",
+                `Watershed Name` = "Lower Arrow Lake") |> 
+  sf::st_transform(4326)
+
+harvey_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356553222 ) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Harvey Creek",
+                `Watershed Name` = "Elk River") |> 
+  sf::st_transform(4326)
+
+pollock_creek = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356567088) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Pollock Creek",
+                `Watershed Name` = "Elk River") |> 
+  sf::st_transform(4326)
+
+wood_lake = bcdc_query_geodata('freshwater-atlas-lakes') |> 
+  filter(GNIS_NAME_1 == "Wood Lake") |> 
+  filter(BLUE_LINE_KEY == 356569800) |> 
+  collect() |> 
+  st_transform(4326)
+
+lardeau_river = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356569776) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Lardeau River",
+                `Watershed Name` = "Duncan Lake") |> 
+  sf::st_transform(4326)
+
+nicola_river = bcdc_query_geodata('freshwater-atlas-stream-network') |> 
+  filter(BLUE_LINE_KEY == 356363343) |> 
+  collect() |> 
+  dplyr::group_by(BLUE_LINE_KEY) |> 
+  dplyr::summarise() |> 
+  sf::st_buffer(dist = 10) |> 
+  dplyr::mutate(`Waterbody Name` = "Nicola River",
+                `Watershed Name` = "Duncan Lake") |> 
+  sf::st_transform(4326)
+
+completed_ones <- dplyr::bind_rows(
+  burton_creek,
+  snow_creek,
+  fording_river,
+  gold_creek,
+  phillips_creek,
+  harvey_creek,
+  pollock_creek,
+  wood_lake,
+  lardeau_river,
+  nicola_river
+)
+
+completed_ones<-completed_ones |> 
+  select(c(`Waterbody Name`, `Watershed Name`, geometry))
+
+extra_geoms
+
+# new_geometries = dplyr::bind_rows(alouette, bcreek, bluebcreek,
+#                                   burrellcreek,fording,kicking_horse,
+#                                   col_mainstem_gravels,
+#                                   columbia_near_castlegar,lynch_creek,
+#                                   murphy_creek,myers_creek,west_kettle,
+#                                   wilmer_creek,deer_creek,
+#                                   salmo_river, lardeau_river, carnes_creek,
+#                                   fording_river, burton_creek, snow_creek,
+#                                   joseph_creek, perry_creek)
+
+
+####################################################################
+d_with_geometries <- d_with_geometries |> 
+  dplyr::select(-c(`Proposed sampling organization`))
 
 # Rename NA to "None"
 d_with_geometries = d_with_geometries |> 
   dplyr::mutate(proposed_sampling_org = tidyr::replace_na(proposed_sampling_org, "None"))
 ```
 
+
+
+```{r missing geoms}
+
+# there are still waterbodies with missing geometries. Lets get them
+
+c_missing<- c |> 
+  filter(!`Waterbody Name` %in% d$`Waterbody Name`)
+
+
+```
+
 ```{r, fig.width=10, fig.height=8}
 library(RColorBrewer)
 # display.brewer.all()
-org_pal = leaflet::colorFactor(domain = orgs, palette = 'Dark2')
+
 
 # Remove duplicated lake rows
 d_with_geometries = d_with_geometries |> 
@@ -528,64 +767,92 @@ d_with_geometries <- d_with_geometries |>
   mutate(geometry = st_collection_extract(geometry, "POLYGON")) |>
   st_cast("MULTIPOLYGON")
 
-sample_points <- c |>
+sample_points_full <- d_with_geometries |>
   dplyr::select(
     `Waterbody Name`,
-    `Sub-Watershed/Reach Name`,
-    `GPS coordinates\r\nLatitude`,
-    `GPS coordinates\r\nLongitude`,
+    `Watershed Name`,
+    `latitude`,
+    `longitude`,
     `Final sample site name`,
-    `Proposed sampling organization`,
+    proposed_sampling_org,
     `Fish species to be sampled`,
     `Proposed sampling method (eDNA or fish or both)`,
     `Funding source`
-  ) |> 
-  rename(latitude = `GPS coordinates\r\nLatitude`, 
-         longitude = `GPS coordinates\r\nLongitude`)
+  )
 
-sample_points<- sample_points |> 
+
+sample_points<- sample_points_full |> 
+  st_drop_geometry() |> 
   filter(!is.na(latitude) | !is.na(longitude))
 
-sample_points_sf<-st_as_sf(sample_points, coords = c("longitude", "latitude"),
-                           crs = 4326)
+sample_missing<- sample_points_full |> 
+  filter(is.na(latitude) | is.na(longitude))
 
+sample_missing <- sample_missing |>
+  st_transform(3005) |>
+  st_point_on_surface() |>   # always returns a point guaranteed inside polygon
+  st_transform(4326) |>
+  mutate(points_generated = "T")
+
+
+sample_points_sf<-st_as_sf(sample_points |> st_drop_geometry(), coords = c("longitude", "latitude"),
+                           crs = 4326) |>
+  mutate(points_generated = "F")
+
+
+sample_points_total<-bind_rows(sample_points_sf, sample_missing)
+
+sample_points_total<- sample_points_total |> 
+  rename(`Sampling organization` = proposed_sampling_org)
+
+## Only keep those that are on the list c
+sample_points_total <- sample_points_total |> 
+  filter(paste0(`Waterbody Name`) %in% paste0(c$`Waterbody Name`))
+
+org_pal <- colorFactor("Set1", sample_points_total$`Sampling organization`)
 
 leaflet() |> 
   addTiles(group = "OSM") |>
   addProviderTiles(providers$CartoDB, group = "CartoDB") |> 
-  addLayersControl(position = 'bottomleft',
-                   baseGroups = c("CartoDB","OSM"),
-                   options = layersControlOptions(collapsed = F)) |> 
-  addPolygons(
-    data = d_with_geometries,
-    label = ~str_remove(`Waterbody Name`,",.*"),
-    color = ~org_pal(proposed_sampling_org),
-    fillColor = ~org_pal(proposed_sampling_org),
+  addLayersControl(
+    position = 'bottomleft',
+    baseGroups = c("CartoDB","OSM"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) |> 
+  # Polygons if needed
+  # addPolygons(
+  #   data = d_with_geometries,
+  #   label = ~str_remove(`Waterbody Name`,",.*"),
+  #   color = ~org_pal(proposed_sampling_org),
+  #   fillColor = ~org_pal(proposed_sampling_org),
+  #   fillOpacity = 0.8,
+  #   popup = lapply(popup_tbls, htmltools::HTML)
+  # ) |> 
+  addCircleMarkers(
+    data = sample_points_total,  # use the sf object directly
+    color = ~org_pal(`Sampling organization`),
+    fillColor = ~org_pal(`Sampling organization`),
     fillOpacity = 0.8,
-    popup = lapply(
-      popup_tbls,
-      htmltools::HTML
+    radius = 4,
+    label = ~paste0(`Sampling organization`, ", ", `Waterbody Name`),
+    popup = leafpop::popupTable(
+      sample_points_total,
+      zcol = c(
+        "Waterbody Name",
+        "Watershed Name",
+        "Final sample site name",
+        "Sampling organization",
+        "Fish species to be sampled",
+        "Proposed sampling method (eDNA or fish or both)",
+        "Funding source",
+        "points_generated"
+      )
     )
   ) |> 
-  addCircleMarkers(
-    data = sample_points_sf,
-    color = 'black',
-    fillColor = 'black',
-    radius = 3,
-    label = ~paste0(`Proposed sampling organization`,", ",`Waterbody Name`),
-    popup = leafpop::popupTable(sample_points_sf,
-                       zcol = c("Waterbody Name",
-                                "Sub-Watershed/Reach Name",
-                                "Final sample site name",
-                                "Proposed sampling organization",
-                                "Fish species to be sampled",
-                                "Proposed sampling method (eDNA or fish or both)",
-                                "Funding source"))
-  ) |>
   addLegend(
-    title = "Proposed Sampling\nOrganization",
+    title = "Sampling Organization",
     pal = org_pal,
-    values = unique(d_with_geometries$proposed_sampling_org)
+    values = sample_points_total$`Sampling organization`
   )
 ```
 
