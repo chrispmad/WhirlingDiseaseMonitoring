@@ -9,3 +9,4 @@ data/**
 *.Rproj
 output/**
 images
+data_results
