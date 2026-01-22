@@ -401,7 +401,7 @@ park_priorities_s = park_priorities |>
   dplyr::distinct()
 
 # Snag the watershed codes based on names
-subw = sf::read_sf("W:/CMadsen/shared_data_sets/WatershedGroups_lowres.shp")
+subw = sf::read_sf(paste0(lan_root,"2 SCIENCE - Invasives/AIS_R_Projects/CMadsen_Wdrive/shared_data_sets/WatershedGroups_lowres.shp"))
 
 park_priorities_s = park_priorities_s |> 
   dplyr::left_join(
@@ -879,6 +879,8 @@ l_top_100
 ```
 
 ### Watersheds with High-ranking WBs near SARA {.tabset}
+
+
 ```{r}
 sara_sp = sf::st_transform(sara_sp, 4326)
 sara_sp = sf::st_make_valid(sara_sp)
