@@ -1,0 +1,397 @@
+---
+title: "2025 Sampling Locations"
+author: "John Phelan"
+date: "2025-12-02"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+library(sf)
+library(tidyverse)
+library(leaflet)
+library(bcdata)
+library(here)
+library(RColorBrewer)
+library(leaflet.extras)
+library(utils)
+
+# Get onedrive path
+base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
+onedrive_wd = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/2 SCIENCE - Invasives/AIS_R_Projects/LargeDataFiles/"
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
+
+
+# Also read in Martina's new doc that allows us to colour-code the points
+locs = readxl::read_excel(here("data/Whirling_Disease_2025_Sample_Tracking.xlsx")) 
+
+locs$type="edna"
+
+fish_locs<-readxl::read_excel(here("data/Whirling_Disease_2025_Sample_Tracking.xlsx"), sheet = 2) 
+
+fish_locs$type="fish"
+
+locs <- locs |> 
+  filter(`Confirmed to have been sampled in 2025 (Y/N)` == "Y")
+
+fish_locs<- fish_locs |> 
+  filter(`Confirmed to have been sampled in 2025 (Y/N)` == "Y")
+
+colnames(locs)<-snakecase::to_snake_case(colnames(locs))
+
+colnames(fish_locs)<-snakecase::to_snake_case(colnames(fish_locs))
+
+
+locs<- locs |> 
+  mutate(across(everything(), as.character))
+
+fish_locs<- fish_locs |> 
+  mutate(across(everything(), as.character))
+
+total_locations<-bind_rows(locs,fish_locs)
+
+total_locations <- total_locations |> 
+  mutate(sampling_organization = case_when(
+    str_detect(sampling_organization, "WLRS") ~ "WLRS",
+    TRUE ~ sampling_organization
+  ))
+
+total_locations <- total_locations |> 
+  mutate(longitude = as.numeric(longitude), latitude = as.numeric(latitude)) |> 
+  mutate(longitude = abs(longitude)*(-1))
+
+# wshds = bcdc_query_geodata("freshwater-atlas-watershed-groups") |>
+#   collect()
+```
+
+```{r manips}
+
+total_locations <- total_locations |> 
+  mutate(sampling_organization = case_when(
+    str_detect(sampling_organization, "WLRS") ~ "WLRS",
+    str_detect(sampling_organization, "ONA") ~ "ONA",
+    
+    TRUE ~ sampling_organization
+  ))
+
+locs_with_geoms<- total_locations |> 
+  mutate(latitude = as.numeric(latitude),
+         longitude = as.numeric(longitude)) |> 
+  filter(!is.na(latitude) & !is.na(longitude))
+
+locs_missing_geoms<- total_locations |> 
+  mutate(latitude = as.numeric(latitude),
+         longitude = as.numeric(longitude)) |> 
+  filter(is.na(latitude) & is.na(longitude))
+
+
+
+
+total_locations_sf<-st_as_sf(locs_with_geoms, coords = c("longitude", "latitude"), crs = 4326)
+
+
+
+```
+
+
+```{r square_circle}
+make_circle_svg <- function(fill_color) {
+  raw <- sprintf(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'>
+       <circle cx='11' cy='11' r='8' fill='%s' stroke='black' stroke-width='1'/>
+     </svg>",
+     fill_color
+  )
+  paste0("data:image/svg+xml;utf8,", URLencode(raw, reserved = TRUE))
+}
+
+make_square_svg <- function(fill_color) {
+  raw <- sprintf(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'>
+       <rect x='4' y='4' width='14' height='14' fill='%s' stroke='black' stroke-width='1'/>
+     </svg>",
+     fill_color
+  )
+  paste0("data:image/svg+xml;utf8,", URLencode(raw, reserved = TRUE))
+}
+
+```
+
+## Sampling Locations {.tabset} 
+
+### Fish
+```{r map_leaflet, fig.width=10, fig.height=8}
+
+total_locations_sf_renamed = total_locations_sf |> 
+  rename(`Waterbody Name` = waterbody_name,
+         `Subwatershed` = sub_watershed_reach_name,
+         `Sample Site Name` = final_sample_site_name,
+         `Sampling Organization` = sampling_organization,
+         `Metadata Received?` = metadata_received_y_n,
+         `Results - Mc` = result_mc,
+         `Results - Tubifex`= result_tubifex,
+         `Number of Samples` = number_of_samples_collected_per_site_excluding_blanks,
+         `Sample Method` = sampling_method_e_dna_or_fish_or_both,
+         `Comments` = comments,
+         `Type` = type,
+         `Fish Result` = result,
+         `Number Fish Collected` = number_of_fish_collected_per_site)
+
+
+df_fish <- total_locations_sf_renamed |> filter(Type == "fish")
+df_edna <- total_locations_sf_renamed |> filter(Type == "edna")
+# display.brewer.all()
+org_pal <- colorFactor("Set1", total_locations_sf_renamed$`Sampling Organization`)
+org_col <- org_pal(total_locations_sf_renamed$`Sampling Organization`)
+
+# vector of SVG icons with injected fill color
+icon_svg <- mapply(
+  function(type, col) {
+    if (type == "fish") {
+      make_circle_svg(col)
+    } else {
+      make_square_svg(col)
+    }
+  },
+  total_locations_sf_renamed$Type,
+  org_col,
+  SIMPLIFY = TRUE
+)
+
+type_icon_list <- icons(
+  iconUrl = icon_svg,
+  iconWidth = 22,
+  iconHeight = 22
+)
+
+
+
+type_labels <- c(
+  "fish" = "<svg width='12' height='12'>
+               <circle cx='6' cy='6' r='5' fill='white' stroke='black' stroke-width='1'/>
+             </svg> Fish",
+  "edna" = "<svg width='12' height='12'>
+               <rect x='1' y='1' width='10' height='10' fill='white' stroke='black' stroke-width='1'/>
+             </svg> eDNA"
+)
+
+fish_icons <- icons(
+  iconUrl = mapply(make_circle_svg, org_pal(df_fish$`Sampling Organization`), SIMPLIFY = TRUE),
+  iconWidth = 22,
+  iconHeight = 22
+)
+
+# Split datasets
+# df_fish <- total_locations_sf_renamed |> filter(Type == "fish")
+# df_edna <- total_locations_sf_renamed |> filter(Type == "edna")
+
+leaflet() |>
+  # -------------------------
+  # BASEMAPS
+  # -------------------------
+  addTiles(group = "OSM") |>
+  addProviderTiles(providers$CartoDB, group = "CartoDB") |>
+
+  # -------------------------
+  # FISH MARKERS (overlay group)
+  # -------------------------
+  addMarkers(
+    data = df_fish,
+    icon = fish_icons,
+    label = ~paste0(`Sampling Organization`, ", ", `Waterbody Name`),
+    group = "Fish",
+    popup = leafpop::popupTable(
+      df_fish,
+      zcol = c(
+        "Waterbody Name", "Subwatershed", "Sample Site Name", "Sampling Organization",
+        "Metadata Received?", "Results - Mc", "Results - Tubifex", "Number of Samples",
+        "Sample Method", "Comments", "Type", "Fish Result", "Number Fish Collected"
+      )
+    )
+  ) |>
+
+  # -------------------------
+  # EDNA MARKERS (overlay group)
+  # -------------------------
+
+  # -------------------------
+  # LEGEND: SAMPLING ORGANIZATION (COLORS)
+  # -------------------------
+  addLegend(
+    title = "Sampling Organization",
+    colors = org_col[match(unique(total_locations_sf_renamed$`Sampling Organization`),
+                           total_locations_sf_renamed$`Sampling Organization`)],
+    labels = unique(total_locations_sf_renamed$`Sampling Organization`),
+    opacity = 1,
+    position = "bottomright"
+  )
+
+
+```
+### eDNA
+
+```{r eDNA_map,  fig.width=10, fig.height=8}
+
+total_locations_sf_renamed = total_locations_sf |> 
+  rename(`Waterbody Name` = waterbody_name,
+         `Subwatershed` = sub_watershed_reach_name,
+         `Sample Site Name` = final_sample_site_name,
+         `Sampling Organization` = sampling_organization,
+         `Metadata Received?` = metadata_received_y_n,
+         `Results - Mc` = result_mc,
+         `Results - Tubifex`= result_tubifex,
+         `Number of Samples` = number_of_samples_collected_per_site_excluding_blanks,
+         `Sample Method` = sampling_method_e_dna_or_fish_or_both,
+         `Comments` = comments,
+         `Type` = type,
+         `Fish Result` = result,
+         `Number Fish Collected` = number_of_fish_collected_per_site)
+
+# display.brewer.all()
+org_pal <- colorFactor("Set1", total_locations_sf_renamed$`Sampling Organization`)
+org_col <- org_pal(total_locations_sf_renamed$`Sampling Organization`)
+
+
+
+type_labels <- c(
+  "fish" = "<svg width='12' height='12'>
+               <circle cx='6' cy='6' r='5' fill='white' stroke='black' stroke-width='1'/>
+             </svg> Fish",
+  "edna" = "<svg width='12' height='12'>
+               <rect x='1' y='1' width='10' height='10' fill='white' stroke='black' stroke-width='1'/>
+             </svg> eDNA"
+)
+
+
+
+# Split datasets
+
+
+edna_icons <- icons(
+  iconUrl = mapply(make_square_svg, org_pal(df_edna$`Sampling Organization`), SIMPLIFY = TRUE),
+  iconWidth = 22,
+  iconHeight = 22
+)
+
+leaflet() |>
+  # -------------------------
+  # BASEMAPS
+  # -------------------------
+  addTiles(group = "OSM") |>
+  addProviderTiles(providers$CartoDB, group = "CartoDB") |>
+
+  # -------------------------
+  # FISH MARKERS (overlay group)
+  # -------------------------
+  addMarkers(
+    data = df_edna,
+    icon = edna_icons,
+    label = ~paste0(`Sampling Organization`, ", ", `Waterbody Name`),
+    group = "eDNA",
+    popup = leafpop::popupTable(
+      df_fish,
+      zcol = c(
+        "Waterbody Name", "Subwatershed", "Sample Site Name", "Sampling Organization",
+        "Metadata Received?", "Results - Mc", "Results - Tubifex", "Number of Samples",
+        "Sample Method", "Comments", "Type", "Fish Result", "Number Fish Collected"
+      )
+    )
+  ) |>
+
+  # -------------------------
+  # EDNA MARKERS (overlay group)
+  # -------------------------
+
+  # -------------------------
+  # LEGEND: SAMPLING ORGANIZATION (COLORS)
+  # -------------------------
+  addLegend(
+    title = "Sampling Organization",
+    colors = org_col[match(unique(total_locations_sf_renamed$`Sampling Organization`),
+                           total_locations_sf_renamed$`Sampling Organization`)],
+    labels = unique(total_locations_sf_renamed$`Sampling Organization`),
+    opacity = 1,
+    position = "bottomright"
+  )
+
+
+```
+
+### All Sampling Locations
+
+```{r all_sample_locations,  fig.width=10, fig.height=8}
+
+leaflet() |>
+  # -------------------------
+  # BASEMAPS
+  # -------------------------
+  addTiles(group = "OSM") |>
+  addProviderTiles(providers$CartoDB, group = "CartoDB") |>
+
+  # -------------------------
+  # FISH MARKERS (overlay group)
+  # -------------------------
+  addMarkers(
+    data = df_edna,
+    icon = edna_icons,
+    label = ~paste0(`Sampling Organization`, ", ", `Waterbody Name`),
+    group = "eDNA",
+    popup = leafpop::popupTable(
+      df_fish,
+      zcol = c(
+        "Waterbody Name", "Subwatershed", "Sample Site Name", "Sampling Organization",
+        "Metadata Received?", "Results - Mc", "Results - Tubifex", "Number of Samples",
+        "Sample Method", "Comments", "Type", "Fish Result", "Number Fish Collected"
+      )
+    )
+  ) |>
+  addMarkers(
+    data = df_fish,
+    icon = fish_icons,
+    label = ~paste0(`Sampling Organization`, ", ", `Waterbody Name`),
+    group = "Fish",
+    popup = leafpop::popupTable(
+      df_fish,
+      zcol = c(
+        "Waterbody Name", "Subwatershed", "Sample Site Name", "Sampling Organization",
+        "Metadata Received?", "Results - Mc", "Results - Tubifex", "Number of Samples",
+        "Sample Method", "Comments", "Type", "Fish Result", "Number Fish Collected"
+      )
+    )
+  ) |>
+
+  # -------------------------
+  # EDNA MARKERS (overlay group)
+  # -------------------------
+
+  # -------------------------
+  # LEGEND: SAMPLING ORGANIZATION (COLORS)
+  # -------------------------
+  addLegend(
+    title = "Sampling Organization",
+    colors = org_col[match(unique(total_locations_sf_renamed$`Sampling Organization`),
+                           total_locations_sf_renamed$`Sampling Organization`)],
+    labels = unique(total_locations_sf_renamed$`Sampling Organization`),
+    opacity = 1,
+    position = "bottomright"
+  ) |> 
+  addControl(
+    html = "<div style='background:white; padding:6px; border-radius:4px;'>
+              <b>Type</b><br>
+              <svg width='12' height='12'>
+                <circle cx='6' cy='6' r='5' fill='gray' stroke='black' stroke-width='1'/>
+              </svg> Fish<br>
+              <svg width='12' height='12'>
+                <rect x='1' y='1' width='10' height='10' fill='gray' stroke='black' stroke-width='1'/>
+              </svg> eDNA
+            </div>",
+    position = "topright"
+  ) |>
+   addLayersControl(
+    position = 'bottomleft',
+    baseGroups = c("CartoDB", "OSM"),
+    overlayGroups = c("Fish", "eDNA"),   # <- toggle groups here
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+```
+
