@@ -62,7 +62,7 @@ Where *R~w~* is the rank of a given waterbody (higher ranks indicate more use or
 
 ### Watercraft Inspections Coming from Infected States/Provinces
 
-These are binned watercraft inspections originating from infected states or provinces, as well as from waterbodies in British Columbia (BC) that are infected with whirling disease. The bins represent the number of watercraft headed to BC waterbodies from infected states, provinces, or infected BC waterbodies.
+These are binned watercraft inspections originating from infected states or provinces. The bins represent the number of watercraft headed to BC waterbodies from infected states, provinces, or infected BC waterbodies.
 
 ```{r watercraft_insp_from_inf_areas}
 source("utils/chunk_inspections_entering_BC.R", local = T)
