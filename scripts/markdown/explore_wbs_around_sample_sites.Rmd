@@ -1,0 +1,34 @@
+---
+title: "Explore smaller wbs around sampling sites"
+author: "John Phelan"
+date: "2026-03-26"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+library(tidyverse)
+library(readxl)
+library(BAMMtools)
+library(terra)
+#devtools::install_github("yutannihilation/ggsflabel")
+library(ggsflabel)
+library(tidyterra)
+library(sf)
+library(bcdata)
+
+requery_occs = F
+k_breaks = 5 # number of breaks for k-means clustering
+
+base_dir = stringr::str_extract(getwd(),"C:\\/Users\\/[a-zA-Z]+")
+onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Government of BC/data/")
+lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
+
+#k-means clustering functions
+source("utils/bin_to_kmeans_func.R")
+source("utils/getKMeansBreaks_func.R")
+
+## GGplot label convenience function
+source("utils/bin_info_labs_ggplot_preset.R")
+```
