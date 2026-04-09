@@ -468,6 +468,67 @@ monthly_temps_summarised <- monthly_temps_extracted |>
 wb_list = wb_list |> 
   cbind(monthly_temps_summarised)
 
+# 
+# renames<-c("Annual Mean Temperature", 
+#              "Mean Diurnal Range (temp)", 
+#              "Isothermality", 
+#              "Temperature Seasonality", 
+#              "Max Temperature of Warmest Month", 
+#              "Min Temperature of Coldest Month", 
+#              "Temperature Annual Range", 
+#              "Mean Temperature of Wettest Quarter",
+#              "Mean Temperature of Driest Quarter", 
+#              "Mean Temperature of Warmest Quarter", 
+#              "Mean Temperature of Coldest Quarter", 
+#              "Annual Precipitation", 
+#              "Precipitation of Wettest Month",
+#              "Precipitation of Driest Month", 
+#              "Precipitation Seasonality", 
+#              "Precipitation of Wettest Quarter", 
+#              "Precipitation of Driest Quarter",
+#              "Precipitation of Warmest Quarter", 
+#              "Precipitation of Coldest Quarter")
+#   renames<-gsub(" ", "_", renames)
+#   
+#   cmidata<-geodata::cmip6_world("ACCESS-CM2", ssp = "585", var = "bioc", res = 5, time = "2021-2040",path= paste0(onedrive_wd,"/CMI/"))
+#   names(cmidata)<-renames
+# 
+# temp_rast<-terra::rast(paste0(onedrive_wd,"/raster/raster_temp_summer.tif"))
+# 
+# bc_sf <- bcmaps::bc_bound() |>
+#   st_transform(crs(cmidata)) 
+# 
+# bc_vect <- vect(bc_sf)
+# 
+# 
+# bc_temp <- cmidata |>
+#   crop(bc_vect) |>
+#   mask(bc_vect)
+# 
+# 
+# named_wbs<-read_rds(paste0(onedrive_wd,"/named_lakes_and_rivers_merged.rds"))
+# 
+# bc_temp<- temp_rast |>
+#   crop(bc_vect) |>
+#   mask(bc_vect)
+# 
+# p1<-ggplot() +
+#   geom_spatraster(data = bc_temp[[1]]) +
+#   scale_fill_viridis_c(na.value = "transparent") +
+#   labs(fill = names(bc_temp[[1]])) +
+#   theme_minimal()
+# 
+# # bc_temp<- temp_rast |>
+# #   crop(named_wbs) |>
+# #   mask(named_wbs)
+# # 
+# 
+# 
+# ggsave("./output/annual_temp_bc.png",p1, height = 8, width=6, dpi = 400)
+
+#hydroclim_data<-read_sf(paste0(onedrive_wd,"/raster/"))
+  
+  
 ```
 
 Monthly temperature rasters:
