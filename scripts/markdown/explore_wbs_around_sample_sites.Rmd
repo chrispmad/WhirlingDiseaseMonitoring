@@ -17,6 +17,8 @@ library(ggsflabel)
 library(tidyterra)
 library(sf)
 library(bcdata)
+library(leaflet)
+library(leaflet.extras)
 
 requery_occs = F
 k_breaks = 5 # number of breaks for k-means clustering
@@ -26,9 +28,660 @@ onedrive_wd = paste0(str_extract(getwd(),"C:/Users/[A-Z]+/"),"OneDrive - Governm
 lan_root = "//SFP.IDIR.BCGOV/S140/S40203/WFC AEB/General/"
 
 #k-means clustering functions
-source("utils/bin_to_kmeans_func.R")
-source("utils/getKMeansBreaks_func.R")
+source(here::here("utils","bin_to_kmeans_func.R"))
+source(here::here("utils","getKMeansBreaks_func.R"))
 
 ## GGplot label convenience function
-source("utils/bin_info_labs_ggplot_preset.R")
+source(here::here("utils","bin_info_labs_ggplot_preset.R"))
 ```
+
+
+# Data points and positive detections {.tabset}
+
+I want to look at larger waterbodies, and get a sense of if they are suitable for sampling for TAMS. What water speed is too high for eDNA sampling - this may not be a useful questions as sampling sites and locations are well known by those who do that work. 
+
+What about other creeks? Talking to Patrick, there can be large discrepancies in the desnity of TAMS between creeks that are close together (patchy distribution of worms?). - How do we find more of these to test? We could try to identify based on the environmental conditions of those waterbodies, the substrate types, flow speeds, vegetation cover, slope. 
+
+## Kootenay Lake
+
+Can we use Kootenay Lake as a test case? I selected this waterbody, for two of reasons. Its size would increase the number of smaller waterbodies flowing into it, just because it is big. There were postive results in 2024, but none in 2025 when there was sampling downstream of those 2024 positives. Lets first grab the waterbody, and then look in the stream network for waterbodies that flow into it.
+
+### Streams flowing into Kootenay Lake
+
+```{r get wbs , fig.height= 6, fig.width= 8}
+
+
+kootenay = bcdata::bcdc_query_geodata('freshwater-atlas-lakes') |>
+  bcdata::filter(GNIS_NAME_1 == "Kootenay Lake") |>
+  bcdata::collect() 
+
+
+# get the sampling that we did these last 2 years, spatialise it, and then only get those in Kootenay Lake
+sampling = read.csv(here::here("../AIS_WhirlingDiseaseDashboard/output/sampling_points.csv"))
+
+sampling_sf = st_as_sf(sampling, coords = c("lon", "lat"), crs = 4326) 
+
+koot_samples <- sampling_sf |>
+  st_transform(3005) |>
+  st_filter(
+    kootenay |> st_transform(3005),
+    .predicate = st_is_within_distance,
+    dist = 30000
+  )
+
+
+
+#bc <- bcmaps::bc_bound() |> st_transform(4326)
+# leaflet to have a look at this
+# leaflet() %>%
+#   addProviderTiles("CartoDB.Positron") |> 
+#   addPolygons(
+#     data        = bc,
+#     fillColor   = "transparent",
+#     color       = "black",
+#     weight      = 1,
+#     fillOpacity = 0.5
+#   ) %>%
+#   addPolygons(
+#     data        = kootenay,
+#     fillColor   = "blue",   # use pal() instead of case_when
+#     color       = "blue",
+#     weight      = 1,
+#     fillOpacity = 0.7
+#     # popup       = ~paste0(
+#     #   "Waterbody: ",        waterbody,      "<br>",
+#     #   "SARA Species: ",     Common_Name_EN, "<br>",
+#     #   "Final Risk Level: ", final_risk_b
+#     #)
+#   ) 
+
+# we have the correct lake - now we should get any stream that flows into it. will an interesct work?
+
+upstream_kootenay = bcdc_query_geodata('freshwater-atlas-stream-network') |>
+  filter(INTERSECTS(kootenay)) |>
+  #filter(GNIS_NAME == "Burton Creek") |>
+  collect() |>
+  sf::st_zm() |>
+  # dplyr::group_by(BLUE_LINE_KEY) |>
+  # dplyr::summarise() |>
+  sf::st_buffer(dist = 20) |>
+  dplyr::mutate(type = 'stream') |> 
+  filter(GNIS_NAME != "Kootenay River")
+
+
+
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") |>
+  # addPolygons(
+  #   data        = bc,
+  #   fillColor   = "transparent",
+  #   color       = "black",
+  #   weight      = 1,
+  #   fillOpacity = 0.5
+  # ) %>%
+  addPolygons(
+    data        = kootenay |> st_transform(4326),
+    fillColor   = "transparent",   # use pal() instead of case_when
+    color       = "blue",
+    weight      = 1,
+    fillOpacity = 0.7
+    # popup       = ~paste0(
+    #   "Waterbody: ",        waterbody,      "<br>",
+    #   "SARA Species: ",     Common_Name_EN, "<br>",
+    #   "Final Risk Level: ", final_risk_b
+    #)
+  ) |> 
+  addCircleMarkers(
+    data = koot_samples |> st_transform(4326),
+    radius = 6,
+    fill = TRUE,
+    fillOpacity = 0.8,
+    stroke = TRUE,
+    weight = 1,
+    fillColor = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    color = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    popup = ~paste0(
+      "Sample Site: ", sample_site_name, "<br>",
+      "Fish Result: ", fish_sampling_results_q_pcr_mc_detected, "<br>",
+      "eDNA Result: ", e_dna_results_mc, "<br>",
+      "Year: ", Year
+    )
+  )|> 
+  addPolygons(
+    data = upstream_kootenay |> st_transform(4326),
+    fillColor   = "brown",   # use pal() instead of case_when
+    color       = "brown",
+    weight      = 1,
+    fillOpacity = 0.7,
+    popup = ~paste0(
+      "Waterbody Name:", GNIS_NAME
+    )
+  ) 
+
+```
+
+
+```{r explore_streams, fig.height= 6, fig.width= 8}
+
+kootenay_directions = bcdc_query_geodata('freshwater-atlas-stream-directions') |> 
+  filter(LINEAR_FEATURE_ID %in% upstream_kootenay$LINEAR_FEATURE_ID) |> 
+  collect()
+
+upstream_kootenay_dir = upstream_kootenay |> 
+  dplyr::left_join(
+    kootenay_directions |> 
+      sf::st_drop_geometry() |> 
+      dplyr::select(LINEAR_FEATURE_ID, DOWNSTREAM_DIRECTION),
+    by = "LINEAR_FEATURE_ID"
+  )
+
+upstream_kootenay_dir <- upstream_kootenay_dir |>
+  mutate(
+    cardinal = case_when(
+      DOWNSTREAM_DIRECTION >= 337.5 | DOWNSTREAM_DIRECTION < 22.5  ~ "N",
+      DOWNSTREAM_DIRECTION <  67.5                                  ~ "NE",
+      DOWNSTREAM_DIRECTION < 112.5                                  ~ "E",
+      DOWNSTREAM_DIRECTION < 157.5                                  ~ "SE",
+      DOWNSTREAM_DIRECTION < 202.5                                  ~ "S",
+      DOWNSTREAM_DIRECTION < 247.5                                  ~ "SW",
+      DOWNSTREAM_DIRECTION < 292.5                                  ~ "W",
+      DOWNSTREAM_DIRECTION < 337.5                                  ~ "NW",
+      TRUE ~ NA_character_
+    )
+  )
+
+cardinal_pal <- colorFactor(
+  palette = c(
+    "N"  = "#E41A1C",
+    "NE" = "#FF7F00",
+    "E"  = "#FFFF33",
+    "SE" = "#4DAF4A",
+    "S"  = "#00CED1",
+    "SW" = "#377EB8",
+    "W"  = "#984EA3",
+    "NW" = "#F781BF"
+  ),
+  domain = c("N","NE","E","SE","S","SW","W","NW")
+)
+
+# leaflet() %>%
+#   addProviderTiles("CartoDB.Positron") |>
+#   addPolygons(
+#     data        = kootenay |> st_transform(4326),
+#     fillColor   = "transparent",
+#     color       = "blue",
+#     weight      = 1,
+#     fillOpacity = 0.7
+#   ) |>
+#   addPolygons(
+#     data        = upstream_kootenay_dir |> st_transform(4326),
+#     fillColor   = ~cardinal_pal(cardinal),
+#     color       = ~cardinal_pal(cardinal),
+#     weight      = 2,
+#     opacity     = 0.9,
+#     fillOpacity = 0.7,
+#     popup       = ~paste0(
+#       "Waterbody Name: ", htmltools::htmlEscape(as.character(GNIS_NAME)), "<br>",
+#       "Direction: ", round(DOWNSTREAM_DIRECTION, 1), " deg<br>",
+#       "Cardinal: ", cardinal
+#     )
+#   ) |>
+#   addLegend(
+#     pal    = cardinal_pal,
+#     values = upstream_kootenay_dir$cardinal,
+#     title  = "Flow Direction"
+#   )
+
+```
+
+### Stream Slope
+
+
+
+```{r quiet_slope_Get1, message = FALSE, warning = FALSE}
+
+if(!file.exists('data/Kootenay_Lake_elevation.tif')){
+  # Snag elevation at start and end points for each stream.
+  col_elev = elevatr::get_elev_raster(dplyr::summarise(upstream_kootenay_dir),
+                                      z = 11)
+  col_elev = rast(col_elev)
+  names(col_elev)[1] <- 'elevation'
+  
+  terra::writeRaster(col_elev,'data/Kootenay_Lake_elevation.tif')
+} else {
+  col_elev = terra::rast('data/Kootenay_Lake_elevation.tif')
+  names(col_elev)[1] <- 'elevation'
+}
+
+```
+
+
+```{r elevation_map, fig.height= 6, fig.width= 8}
+
+# ls = bcdc_list()
+# 
+# ls |>
+#   stringr::str_subset(regex("slope", ignore_case = TRUE))
+
+# not publically available?
+# fish_habitat = bcdc_query_geodata("fish-habitat-potential-based-on-stream-gradient-dsc")
+
+
+
+# --- Step 0: add unique ID to polygons ---
+upstream_kootenay_dir <- upstream_kootenay_dir %>%
+  mutate(poly_id = row_number())  # simple unique ID
+
+# --- Step 1: Convert polygons to lines for slope calculation ---
+upstream_kootenay_dir_lines <- st_cast(upstream_kootenay_dir, "LINESTRING")
+
+# --- Step 2: Add the same ID to lines so we can join later ---
+upstream_kootenay_dir_lines <- upstream_kootenay_dir_lines %>%
+  mutate(line_id = upstream_kootenay_dir$poly_id)
+
+# --- Step 3: Transform to BC Albers for metric lengths ---
+upstream_kootenay_dir_lines <- st_transform(upstream_kootenay_dir_lines, 3005)
+# --- Step 5: Sample elevation along lines ---
+elev_vals <- terra::extract(col_elev, vect(upstream_kootenay_dir_lines), along = TRUE)
+
+# --- Step 6: Compute slope per line ---
+slope_df <- elev_vals %>%
+  group_by(ID) %>%  # this ID is from terra::extract
+  summarise(
+    delta_elev = abs(last(elevation) - first(elevation))
+  )
+
+# --- Step 7: Compute line lengths ---
+lengths <- st_length(upstream_kootenay_dir_lines)
+slope_df <- slope_df %>%
+  mutate(
+    length_m = as.numeric(lengths),
+    slope_m_per_m = ifelse(length_m > 0, delta_elev / length_m, NA),
+    line_id = upstream_kootenay_dir_lines$line_id  # add line_id for joining
+  )
+
+# --- Step 8: Join slope back onto polygons ---
+upstream_kootenay_dir <- upstream_kootenay_dir %>%
+  left_join(
+    slope_df %>% select(line_id, slope_m_per_m),
+    by = c("poly_id" = "line_id")
+  )
+
+
+library(viridis)
+
+# Make sure no Inf values
+upstream_kootenay_dir$slope_m_per_m[!is.finite(upstream_kootenay_dir$slope_m_per_m)] <- NA
+
+# Convert to numeric (safely)
+upstream_kootenay_dir$slope_m_per_m <- as.numeric(upstream_kootenay_dir$slope_m_per_m)
+
+# Replace Inf with NA
+upstream_kootenay_dir$slope_m_per_m[!is.finite(upstream_kootenay_dir$slope_m_per_m)] <- NA
+
+# Create slope percent
+upstream_kootenay_dir$slope_pct <- upstream_kootenay_dir$slope_m_per_m * 100
+
+
+upstream_kootenay_dir = upstream_kootenay_dir |> st_transform(4326)
+
+upstream_kootenay_dir_plot = upstream_kootenay_dir |> 
+  filter(slope_pct >= 0.5)
+# Palette
+slope_pal_pct <- colorNumeric(
+  palette = "viridis",
+  domain  = upstream_kootenay_dir_plot$slope_pct,
+  na.color = "transparent"
+)
+
+col_elev_web <- terra::aggregate(col_elev, fact = 4, fun = mean)
+
+# Leaflet map with slope %
+leaflet(upstream_kootenay_dir) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addRasterImage(col_elev_web,
+                 opacity = 0.7,
+                 colors  = gray.colors(256, start = 1, end = 0) # white → black
+  ) |> 
+  addPolygons(
+    data        = kootenay |> st_transform(4326),
+    fillColor   = "transparent",
+    color       = "black",
+    weight      = 1.5,
+    fillOpacity = 0.7
+  ) |> 
+  addCircleMarkers(
+    data = koot_samples |> st_transform(4326),
+    radius = 6,
+    fill = TRUE,
+    fillOpacity = 0.8,
+    stroke = TRUE,
+    weight = 1,
+    fillColor = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    color = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    popup = ~paste0(
+      "Sample Site: ", sample_site_name, "<br>",
+      "Fish Result: ", fish_sampling_results_q_pcr_mc_detected, "<br>",
+      "eDNA Result: ", e_dna_results_mc, "<br>",
+      "Year: ", Year
+    )
+  ) |> 
+  addPolygons(
+    fillColor   = ~slope_pal_pct(slope_pct),
+    color       =  ~slope_pal_pct(slope_pct),
+    weight      = 4,
+    opacity     = 0.7,
+    fillOpacity = 0.6,
+    popup = ~paste0(
+      "Waterbody Name: ", htmltools::htmlEscape(GNIS_NAME), "<br>",
+      "Slope: ", signif(slope_pct, 2), " %"
+    )
+  ) %>%
+  addLegend(
+    pal   = slope_pal_pct,
+    values = upstream_kootenay_dir$slope_pct,
+    title = "Slope (%)"
+  )
+
+
+
+```
+
+## Positive Detection Points
+
+After looking at Kootenay Lake, what about looking at the slope of rivers and streams that are within 10km of any positive detection (which were all in 2014).
+
+### Waterbodies near positive detections
+
+```{r checking around positive points, fig.height= 6, fig.width= 8}
+
+sampling_pos = sampling_sf |> 
+  filter(fish_sampling_results_q_pcr_mc_detected == "Positive" |
+           e_dna_results_mc == "Positive") |> 
+  distinct()
+
+# we have the positive points - lets find surrounding streams
+
+sampling_buff = sampling_pos |> 
+  st_transform(3005) |> 
+  st_buffer(10000)
+
+
+# lets do rivers
+surrounding_pos_rivers = bcdc_query_geodata('freshwater-atlas-rivers') |>
+  filter(INTERSECTS(sampling_buff)) |>
+  #filter(GNIS_NAME == "Burton Creek") |>
+  collect() |>
+  # dplyr::group_by(BLUE_LINE_KEY) |>
+  # dplyr::summarise() |>
+  dplyr::mutate(type = 'River')
+
+# these are the streams
+surrounding_pos_streams1 = bcdc_query_geodata('freshwater-atlas-stream-network') |>
+  filter(INTERSECTS(sampling_buff)) |>
+  #filter(GNIS_NAME == "Burton Creek") |>
+  collect() |>
+  sf::st_zm() |>
+  # dplyr::group_by(BLUE_LINE_KEY) |>
+  # dplyr::summarise() |>
+  sf::st_buffer(dist = 20) |>
+  dplyr::mutate(type = 'stream') |> 
+  filter(GNIS_NAME != "Kootenay River")
+
+surrounding_pos_streams = bind_rows(surrounding_pos_rivers, surrounding_pos_streams1)
+
+
+bbox <- sampling_pos |> st_transform(4326) |> st_bbox()
+
+
+
+leaflet(upstream_kootenay_dir) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  fitBounds(
+    lng1 = bbox[["xmin"]],
+    lat1 = bbox[["ymin"]],
+    lng2 = bbox[["xmax"]],
+    lat2 = bbox[["ymax"]]
+  ) %>%
+  addCircleMarkers(
+    data = sampling_sf |> st_transform(4326),
+    radius = 6,
+    fill = TRUE,
+    fillOpacity = 0.8,
+    stroke = TRUE,
+    weight = 1,
+    fillColor = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    color = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    popup = ~paste0(
+      "Sample Site: ", sample_site_name, "<br>",
+      "Fish Result: ", fish_sampling_results_q_pcr_mc_detected, "<br>",
+      "eDNA Result: ", e_dna_results_mc, "<br>",
+      "Year: ", Year
+    )
+  ) |> 
+  addPolygons(
+    data        = surrounding_pos_streams |> st_transform(4326),
+    fillColor   = "transparent",
+    color       = "black",
+    weight      = 1.5,
+    fillOpacity = 0.7
+  )
+
+```
+
+### Stream Slope
+
+```{r quiet_slope_Get2, message = FALSE, warning = FALSE}
+
+col_elev = elevatr::get_elev_raster(dplyr::summarise(surrounding_pos_streams),
+                                    z = 11)
+
+```
+
+Rivers all have low slope. This is probably due to how slope is being estimated - elevation of the surrounding areas may not be indicative of true river slope. Maybe rivers should be removed from this...
+
+```{r slope of these streams, fig.height= 6, fig.width= 8}
+
+# Snag elevation at start and end points for each stream.
+
+col_elev = rast(col_elev)
+names(col_elev)[1] <- 'elevation'
+
+
+
+
+# --- Step 0: add unique ID to polygons ---
+surrounding_pos_streams <- surrounding_pos_streams %>%
+  mutate(poly_id = row_number())  # simple unique ID
+
+# --- Step 1: Convert polygons to lines for slope calculation ---
+surrounding_pos_streams_lines <- st_cast(surrounding_pos_streams, "LINESTRING")
+
+# --- Step 2: Add the same ID to lines so we can join later ---
+surrounding_pos_streams_lines <- surrounding_pos_streams_lines %>%
+  mutate(line_id = surrounding_pos_streams_lines$poly_id)
+
+# --- Step 3: Transform to BC Albers for metric lengths ---
+surrounding_pos_streams_lines <- st_transform(surrounding_pos_streams_lines, 3005)
+# --- Step 5: Sample elevation along lines ---
+elev_vals <- terra::extract(col_elev, vect(surrounding_pos_streams_lines), along = TRUE)
+
+# --- Step 6: Compute slope per line ---
+slope_df <- elev_vals %>%
+  group_by(ID) %>%  # this ID is from terra::extract
+  summarise(
+    delta_elev = abs(last(elevation) - first(elevation))
+  )
+
+# --- Step 7: Compute line lengths ---
+lengths <- st_length(surrounding_pos_streams_lines)
+
+slope_df <- slope_df %>%
+  mutate(
+    length_m = as.numeric(lengths),
+    slope_m_per_m = ifelse(length_m > 0, delta_elev / length_m, NA),
+    line_id = surrounding_pos_streams_lines$line_id  # add line_id for joining
+  )
+
+# --- Step 8: Join slope back onto polygons ---
+surrounding_pos_streams <- surrounding_pos_streams %>%
+  left_join(
+    slope_df %>% select(line_id, slope_m_per_m),
+    by = c("poly_id" = "line_id")
+  )
+
+
+library(viridis)
+
+# Make sure no Inf values
+surrounding_pos_streams$slope_m_per_m[!is.finite(surrounding_pos_streams$slope_m_per_m)] <- NA
+
+# Convert to numeric (safely)
+surrounding_pos_streams$slope_m_per_m <- as.numeric(surrounding_pos_streams$slope_m_per_m)
+
+# Replace Inf with NA
+surrounding_pos_streams$slope_m_per_m[!is.finite(surrounding_pos_streams$slope_m_per_m)] <- NA
+
+# Create slope percent
+surrounding_pos_streams$slope_pct <- surrounding_pos_streams$slope_m_per_m * 100
+
+
+surrounding_pos_streams = surrounding_pos_streams |> st_transform(4326)
+
+surrounding_pos_streams_plot = surrounding_pos_streams
+#   filter(slope_pct >= 0.5)
+
+# Palette — na.color gives NA streams a distinct colour
+# Define palette FIRST
+slope_pal_pct <- colorNumeric(
+  palette  = "viridis",
+  domain   = surrounding_pos_streams_plot$slope_pct,
+  na.color = "transparent"
+)
+
+# THEN create the color column
+surrounding_pos_streams_plot$slope_color <- ifelse(
+  is.na(surrounding_pos_streams_plot$slope_pct),
+  "#000000",
+  slope_pal_pct(surrounding_pos_streams_plot$slope_pct)
+)
+
+col_elev_web <- terra::aggregate(col_elev, fact = 4, fun = mean)
+
+surrounding_pos_streams_plot = surrounding_pos_streams_plot |> 
+  filter(slope_pct > 0.002 | slope_pct < 0.00001)
+
+# Leaflet map with slope %
+leaflet(surrounding_pos_streams_plot) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  fitBounds(
+    lng1 = bbox[["xmin"]],
+    lat1 = bbox[["ymin"]],
+    lng2 = bbox[["xmax"]],
+    lat2 = bbox[["ymax"]]
+  ) %>%
+  # addRasterImage(col_elev_web,
+  #                opacity = 0.7,
+  #                colors  = gray.colors(256, start = 1, end = 0) # white → black
+  #                ) |>
+  addPolygons(
+    data        = kootenay |> st_transform(4326),
+    fillColor   = "transparent",
+    color       = "black",
+    weight      = 1.5,
+    fillOpacity = 0.7
+  ) |>
+  addPolygons(
+  fillColor   = ~slope_color,
+  color       = ~slope_color,
+  weight      = 4,
+  opacity     = 0.7,
+  fillOpacity = 0.6,
+  popup = ~paste0(
+    "Waterbody Name: ", htmltools::htmlEscape(GNIS_NAME), "<br>",
+    "Slope: ", ifelse(is.na(slope_pct), "N/A", paste0(signif(slope_pct, 2), " %"))
+  )
+) %>%
+  addCircleMarkers(
+    data = sampling_pos |> st_transform(4326),
+    radius = 6,
+    fill = TRUE,
+    fillOpacity = 0.8,
+    stroke = TRUE,
+    weight = 1,
+    fillColor = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    color = ~ifelse(
+      (!is.na(fish_sampling_results_q_pcr_mc_detected) & fish_sampling_results_q_pcr_mc_detected == "Positive") |
+        (!is.na(e_dna_results_mc) & e_dna_results_mc == "Positive"),
+      "orange",
+      "blue"
+    ),
+    popup = ~paste0(
+      "Sample Site: ", sample_site_name, "<br>",
+      "Fish Result: ", fish_sampling_results_q_pcr_mc_detected, "<br>",
+      "eDNA Result: ", e_dna_results_mc, "<br>",
+      "Year: ", Year
+    )
+  ) |> 
+  addLegend(
+  pal    = slope_pal_pct,
+  values = surrounding_pos_streams_plot$slope_pct,
+  title  = "Slope (%)",
+  na.label = "No data"
+)
+
+
+# leaflet(surrounding_pos_streams_plot |> filter(GNIS_NAME == "Elk River")) %>%
+#   addProviderTiles("CartoDB.Positron") %>%
+#   addPolygons(
+#     fillColor   = ~slope_pal_pct(slope_pct),
+#     color       =  "blue",
+#     weight      = 4,
+#     opacity     = 0.7,
+#     fillOpacity = 0.6,
+#     popup = ~paste0(
+#       "Waterbody Name: ", htmltools::htmlEscape(GNIS_NAME), "<br>",
+#       "Slope: ", signif(slope_pct, 2), " %"
+#     )
+#   )
+
+
+
+```
+
