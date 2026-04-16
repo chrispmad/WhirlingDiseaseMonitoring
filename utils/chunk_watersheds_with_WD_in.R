@@ -22,6 +22,8 @@ ws_w_edna_fish = ws |>
       sf::st_transform(3005) |>
       dplyr::bind_rows(emerald_lake_centroid)
   )
+#saving emerald lake watershed for later use.
+#sf::write_sf(ws_w_edna_fish[1,], "output/emerald_lake_loc.gpkg")
 
 ws_bbox = sf::st_bbox(ws_w_edna_fish |> sf::st_buffer(dist = 50000))
 
