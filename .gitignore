@@ -10,3 +10,5 @@ data/**
 output/**
 images
 data_results
+.positai
+*.png
