@@ -12,3 +12,7 @@ images
 data_results
 .positai
 *.png
+*.ttf
+*.css
+*.js
+*.scss
