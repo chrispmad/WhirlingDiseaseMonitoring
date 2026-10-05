@@ -5,6 +5,7 @@ date: "`r Sys.Date()`"
 output: 
   html_document:
     css: my_style.css
+    self_contained: false
 editor_options: 
   chunk_output_type: console
 ---
@@ -545,13 +546,13 @@ The listed waterbodies provided were (in no particular order):
 
 -   Luxor Creek
 
--   Galena Creek (Fraling Creek in Freshwater Atlas)
+-   Galena Creek 
 
 -   Slocan Lake
 
--   Lower Kootenay River (how to do "lower"?)
+-   Lower Kootenay River
 
--   Lower Columbia River (how to do "lower"?)
+-   Lower Columbia River
 
 -   Arrow Lake
 
@@ -567,15 +568,16 @@ The listed waterbodies provided were (in no particular order):
 
 -   Slocan River
 
--   Duncan Dam (fish weir) = Is this Duncan Lake?
+-   Duncan Dam (fish weir)
 
--   Moyie Lake (at the lake outflow (near Eagles nest golf course))
+-   Moyie Lake (at the lake outflow
 
--   Boat launch area in Castlegar (Columbia and Kootenay River?)
+-   Boat launch area in Castlegar
 
--   Beaver Creek Provincial Park in Trail (Columbia River?)
+-   Beaver Creek Provincial Park in Trail
 
--   Trail boat launch (Columbia River?)
+-   Trail boat launch
+
 
 -   Mabel Lake
 
@@ -800,9 +802,11 @@ wb_list_final_w_FN_nice_names = wb_list_final_w_FN_nice_names |>
 ```
 
 ```{r write_out_data}
-saveRDS(wb_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_all_waterbodies.rds"))
-saveRDS(wb_list_final_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_100_waterbodies.rds"))
-saveRDS(wb_list_final_w_FN_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_waterbodies_for_sampling.rds"))
+
+#uncomment if you need them
+# saveRDS(wb_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_all_waterbodies.rds"))
+# saveRDS(wb_list_final_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_100_waterbodies.rds"))
+# saveRDS(wb_list_final_w_FN_nice_names, paste0(onedrive_wd,"output_of_WD_monitoring_analysis_top_waterbodies_for_sampling.rds"))
 ```
 
 ```{r write_out_results_to_excel_file}
